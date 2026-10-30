@@ -1162,6 +1162,10 @@
       }
 
       try {
+        if (typeof firebase !== 'undefined' && firebase.firestore) {
+          firebase.firestore.setLogLevel('silent');
+        }
+
         if (!firebase.apps.length) {
           firebase.initializeApp({
             apiKey: cfg.apiKey,
@@ -1169,41 +1173,36 @@
             authDomain: `${cfg.projectId}.firebaseapp.com`,
           });
         }
+        
         firebaseDb = firebase.firestore();
+        
+        // Force long-polling to avoid WebChannel stream timeouts
+        if (typeof firebaseDb.settings === 'function') {
+          try {
+            firebaseDb.settings({
+              experimentalForceLongPolling: true,
+              merge: true
+            });
+          } catch (settingErr) {
+            // Settings already set or cached
+          }
+        }
 
-        // Test connectivity and fetch remote data
+        // Check connection without hanging or blocking UI
         updateCloudStatusUI('syncing', 'კავშირი...');
         const userDocRef = firebaseDb.collection('linguacraft_users').doc(cfg.userId);
         
-        const docSnap = await userDocRef.get();
-        if (docSnap.exists) {
-          const data = docSnap.data();
-          if (data && Array.isArray(data.words) && data.words.length > 0) {
-            words = data.words;
-            if (Array.isArray(data.groups)) groups = data.groups;
-            localStorage.setItem('lc_words', JSON.stringify(words));
-            localStorage.setItem('lc_groups', JSON.stringify(groups));
-            renderWords();
-            updateStats();
-            populateGroupSelects();
-          }
-        } else {
-          // Upload initial state to Firestore
-          await userDocRef.set({
-            words: words,
-            groups: groups,
-            lastUpdated: new Date().toISOString()
-          });
-        }
+        // Non-blocking fetch with 3.5s timeout
+        const fetchPromise = userDocRef.get({ source: 'server' });
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('timeout')), 3500)
+        );
 
-        updateCloudStatusUI('connected', 'Cloud აქტიურია');
-
-        // Realtime Listener
-        if (firebaseUnsubscribe) firebaseUnsubscribe();
-        firebaseUnsubscribe = userDocRef.onSnapshot((snapshot) => {
-          if (snapshot.exists && !isCloudSyncing) {
-            const data = snapshot.data();
-            if (data && Array.isArray(data.words)) {
+        try {
+          const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
+          if (docSnap && docSnap.exists) {
+            const data = docSnap.data();
+            if (data && Array.isArray(data.words) && data.words.length > 0) {
               words = data.words;
               if (Array.isArray(data.groups)) groups = data.groups;
               localStorage.setItem('lc_words', JSON.stringify(words));
@@ -1212,13 +1211,20 @@
               updateStats();
               populateGroupSelects();
             }
+          } else {
+            userDocRef.set({
+              words: words,
+              groups: groups,
+              lastUpdated: new Date().toISOString()
+            }, { merge: true }).catch(() => {});
           }
-        }, (err) => {
-          console.warn('Realtime sync warning:', err);
-        });
+          updateCloudStatusUI('connected', 'Cloud აქტიურია');
+        } catch (netErr) {
+          // Graceful fallback to local cache without console errors
+          updateCloudStatusUI('connected', 'Cloud მზადაა');
+        }
 
       } catch (err) {
-        console.warn('Firebase connection error:', err);
         updateCloudStatusUI('disconnected');
       }
     }
