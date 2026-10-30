@@ -1094,13 +1094,11 @@
     // AI Feed Storage
     let aiFeedItems = JSON.parse(localStorage.getItem('lc_ai_feed')) || [];
 
-    // Firebase state
-    let firebaseDb = null;
-    let firebaseUnsubscribe = null;
-    let isCloudSyncing = false;
-    let reconnectTimeout = null;
+    // Firebase Firestore State
+    let db = null;
+    let userDocRef = null;
 
-    /* Helper: Compress word objects for Firestore to keep payload minimal */
+    /* Helper: Compress word objects to keep payload minimal */
     function sanitizeWordsForCloud(wordList) {
       const uniqueMap = new Map();
       wordList.forEach(w => {
@@ -1123,43 +1121,66 @@
       return Array.from(uniqueMap.values());
     }
 
-    /* ========================================================
-       FILTERING & SEARCH LOGIC
-       ======================================================== */
+    /* Helper: Escape HTML string */
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function ensureGroupsSynchronized() {
+      if (!Array.isArray(groups) || groups.length === 0) {
+        groups = DEFAULT_GROUPS;
+        localStorage.setItem('lc_groups', JSON.stringify(groups));
+      }
+    }
+
+    function populateGroupSelects() {
+      const filterSelect = document.getElementById('group-filter');
+      const formSelect = document.getElementById('select-word-group');
+      if (filterSelect) {
+        filterSelect.innerHTML = groups.map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+        filterSelect.value = selectedGroup;
+      }
+      if (formSelect) {
+        formSelect.innerHTML = groups.filter(g => g.id !== 'all').map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`).join('');
+      }
+    }
+
     function getFilteredWords() {
       return words.filter(w => {
         const matchesLevel = selectedLevel === 'all' || (w.level || 'B1') === selectedLevel;
         const matchesGroup = selectedGroup === 'all' || w.group === selectedGroup;
-        const q = searchQuery.toLowerCase().trim();
-        const matchesSearch = !q ||
-          (w.en && w.en.toLowerCase().includes(q)) ||
-          (w.ge && w.ge.toLowerCase().includes(q)) ||
-          (w.example && w.example.toLowerCase().includes(q));
-
+        const query = searchQuery.trim().toLowerCase();
+        const matchesSearch = !query || 
+          (w.en && w.en.toLowerCase().includes(query)) || 
+          (w.ge && w.ge.toLowerCase().includes(query));
         return matchesLevel && matchesGroup && matchesSearch;
       });
     }
 
     function setLevelFilter(lvl) {
       selectedLevel = lvl;
-      visibleWordsCount = WORDS_PAGE_SIZE;
-
-      const levels = ['all', 'B1', 'B2', 'C1'];
-      levels.forEach(l => {
+      ['all', 'B1', 'B2', 'C1'].forEach(l => {
         const btn = document.getElementById(`btn-lvl-${l}`);
-        if (!btn) return;
-        if (l === lvl) {
-          btn.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs bg-indigo-600 text-white shadow-sm transition";
-        } else {
-          btn.className = "px-3.5 py-1.5 rounded-xl font-medium text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5";
+        if (btn) {
+          if (l === lvl) {
+            btn.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs bg-indigo-600 text-white shadow-sm transition";
+          } else {
+            btn.className = "px-3.5 py-1.5 rounded-xl font-medium text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5";
+          }
         }
       });
-
+      visibleWordsCount = WORDS_PAGE_SIZE;
       renderWords();
     }
 
-    function filterByGroup(groupId) {
-      selectedGroup = groupId;
+    function filterByGroup(grp) {
+      selectedGroup = grp;
       visibleWordsCount = WORDS_PAGE_SIZE;
       renderWords();
     }
@@ -1169,58 +1190,6 @@
       searchQuery = input ? input.value : '';
       visibleWordsCount = WORDS_PAGE_SIZE;
       renderWords();
-    }
-
-    /* ========================================================
-       UTILITY & HELPER FUNCTIONS
-       ======================================================== */
-    function escapeHtml(text) {
-      if (!text) return '';
-      return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
-    function ensureGroupsSynchronized() {
-      // Ensure DEFAULT_GROUPS exist if groups array is corrupted or empty
-      if (!Array.isArray(groups) || groups.length === 0) {
-        groups = DEFAULT_GROUPS;
-        localStorage.setItem('lc_groups', JSON.stringify(groups));
-      }
-      DEFAULT_GROUPS.forEach(dg => {
-        if (!groups.some(g => g.id === dg.id)) {
-          groups.push(dg);
-        }
-      });
-      localStorage.setItem('lc_groups', JSON.stringify(groups));
-    }
-
-    function populateGroupSelects() {
-      const selectWordGroup = document.getElementById('select-word-group');
-      const groupFilter = document.getElementById('group-filter');
-
-      if (selectWordGroup) {
-        selectWordGroup.innerHTML = groups
-          .filter(g => g.id !== 'all')
-          .map(g => `<option value="${g.id}">${escapeHtml(g.name)}</option>`)
-          .join('');
-      }
-
-      if (groupFilter) {
-        groupFilter.innerHTML = groups
-          .map(g => `<option value="${g.id}" ${g.id === selectedGroup ? 'selected' : ''}>${escapeHtml(g.name)}</option>`)
-          .join('');
-      }
-    }
-
-    function saveToLocalStorage() {
-      localStorage.setItem('lc_words', JSON.stringify(words));
-      localStorage.setItem('lc_groups', JSON.stringify(groups));
-      updateStats();
-      syncToFirebase();
     }
 
     function toggleSelectForAI(id, e) {
@@ -1249,123 +1218,129 @@
       if (item) {
         item.status = item.status === 'mastered' ? 'learning' : 'mastered';
         saveToLocalStorage();
+        updateStats();
         renderWords();
-        showToast(item.status === 'mastered' ? 'სიტყვა მონიშნულია როგორც ათვისებული 🎉' : 'სიტყვა გადავიდა შესასწავლში');
       }
     }
 
     function toggleTranslationReveal(id) {
       const transEl = document.getElementById(`trans-${id}`);
       const btnEl = document.getElementById(`btn-trans-${id}`);
-      if (!transEl) return;
+      if (!transEl || !btnEl) return;
       if (transEl.classList.contains('hidden')) {
         transEl.classList.remove('hidden');
-        if (btnEl) btnEl.innerHTML = '<i class="fa-solid fa-eye-slash text-[10px]"></i> თარგმანის დამალვა';
+        btnEl.innerHTML = '<i class="fa-solid fa-eye-slash text-[10px]"></i> დამალვა';
       } else {
         transEl.classList.add('hidden');
-        if (btnEl) btnEl.innerHTML = '<i class="fa-solid fa-eye text-[10px]"></i> თარგმანის ნახვა';
+        btnEl.innerHTML = '<i class="fa-solid fa-eye text-[10px]"></i> თარგმანის ნახვა';
       }
     }
 
-    function showToast(msg, isError = false) {
-      const toast = document.getElementById('toast');
-      const toastMsg = document.getElementById('toast-msg');
-      const toastIcon = document.getElementById('toast-icon');
-      if (!toast || !toastMsg) return;
+    function saveToLocalStorage() {
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      localStorage.setItem('lc_groups', JSON.stringify(groups));
+      syncToFirebaseDirect();
+    }
 
-      toastMsg.textContent = msg;
-      if (isError) {
-        toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400';
+    /* ========================================================
+       UI, THEME, CLOUD & UTILITY HELPERS
+       ======================================================== */
+    function initTheme() {
+      const savedTheme = localStorage.getItem('lc_theme') || 'dark';
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        updateThemeIcon(true);
       } else {
-        toastIcon.className = 'fa-solid fa-circle-check text-emerald-400';
+        document.documentElement.classList.remove('dark');
+        updateThemeIcon(false);
       }
+    }
 
-      toast.classList.remove('translate-y-20', 'opacity-0');
-      setTimeout(() => {
-        toast.classList.add('translate-y-20', 'opacity-0');
-      }, 2800);
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('lc_theme', isDark ? 'dark' : 'light');
+      updateThemeIcon(isDark);
+    }
+
+    function updateThemeIcon(isDark) {
+      const icon = document.getElementById('theme-icon');
+      if (!icon) return;
+      if (isDark) {
+        icon.className = 'fa-solid fa-sun text-xs sm:text-sm text-amber-400';
+      } else {
+        icon.className = 'fa-solid fa-moon text-xs sm:text-sm';
+      }
     }
 
     function switchTab(tabId) {
       const tabs = ['vocab', 'daily-ai', 'ai', 'writing', 'practice'];
       tabs.forEach(t => {
         const sec = document.getElementById(`tab-${t}`);
-        const navBtn = document.getElementById(`nav-${t}`);
-        const mobNavBtn = document.getElementById(`mob-nav-${t}`);
-
-        if (t === tabId) {
-          if (sec) sec.classList.remove('hidden');
-          if (navBtn) {
-            navBtn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm transition whitespace-nowrap";
+        const dBtn = document.getElementById(`nav-${t}`);
+        const mBtn = document.getElementById(`mob-nav-${t}`);
+        if (sec) sec.classList.toggle('hidden', t !== tabId);
+        if (dBtn) {
+          if (t === tabId) {
+            dBtn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm transition whitespace-nowrap";
+          } else {
+            dBtn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition whitespace-nowrap";
           }
-          if (mobNavBtn) {
-            mobNavBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-indigo-600 dark:text-indigo-400";
-          }
-        } else {
-          if (sec) sec.classList.add('hidden');
-          if (navBtn) {
-            navBtn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition whitespace-nowrap";
-          }
-          if (mobNavBtn) {
-            mobNavBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200";
+        }
+        if (mBtn) {
+          if (t === tabId) {
+            mBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-indigo-600 dark:text-indigo-400";
+          } else {
+            mBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200";
           }
         }
       });
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    function toggleTheme() {
-      const html = document.documentElement;
-      const icon = document.getElementById('theme-icon');
-      if (html.classList.contains('dark')) {
-        html.classList.remove('dark');
-        localStorage.setItem('lc_theme', 'light');
-        if (icon) icon.className = 'fa-solid fa-sun text-xs sm:text-sm text-amber-500';
-      } else {
-        html.classList.add('dark');
-        localStorage.setItem('lc_theme', 'dark');
-        if (icon) icon.className = 'fa-solid fa-moon text-xs sm:text-sm';
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      const msgEl = document.getElementById('toast-msg');
+      const icon = document.getElementById('toast-icon');
+      if (!toast || !msgEl) return;
+
+      msgEl.textContent = message;
+      if (icon) {
+        icon.className = isError 
+          ? 'fa-solid fa-circle-exclamation text-rose-400' 
+          : 'fa-solid fa-circle-check text-emerald-400';
       }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      clearTimeout(window._toastTimeout);
+      window._toastTimeout = setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3000);
     }
 
-    function initTheme() {
-      const saved = localStorage.getItem('lc_theme');
-      const icon = document.getElementById('theme-icon');
-      if (saved === 'light') {
-        document.documentElement.classList.remove('dark');
-        if (icon) icon.className = 'fa-solid fa-sun text-xs sm:text-sm text-amber-500';
-      } else {
-        document.documentElement.classList.add('dark');
-        if (icon) icon.className = 'fa-solid fa-moon text-xs sm:text-sm';
-      }
-    }
-
-    function updateCloudStatusUI(status, label = '') {
-      const indicator = document.getElementById('cloud-indicator');
-      const textEl = document.getElementById('cloud-status-text');
-      if (!indicator || !textEl) return;
+    function updateCloudStatusUI(status, label) {
+      const ind = document.getElementById('cloud-indicator');
+      const txt = document.getElementById('cloud-status-text');
+      if (txt) txt.textContent = label;
+      if (!ind) return;
 
       if (status === 'connected') {
-        indicator.className = 'w-2 h-2 rounded-full bg-emerald-500';
-        textEl.textContent = label || 'Cloud აქტიურია';
+        ind.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
       } else if (status === 'syncing') {
-        indicator.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
-        textEl.textContent = label || 'ინახება...';
+        ind.className = 'w-2 h-2 rounded-full bg-amber-500 animate-ping';
       } else {
-        indicator.className = 'w-2 h-2 rounded-full bg-slate-400';
-        textEl.textContent = label || 'Cloud';
+        ind.className = 'w-2 h-2 rounded-full bg-rose-500';
       }
     }
 
     function openCloudModal() {
-      const modal = document.getElementById('cloud-modal');
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
-      if (modal) {
-        document.getElementById('fb-api-key').value = cfg.apiKey || '';
-        document.getElementById('fb-project-id').value = cfg.projectId || '';
-        document.getElementById('fb-user-id').value = cfg.userId || 'saba';
-        modal.classList.remove('hidden');
-      }
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || 'null') || DEFAULT_FB_CONFIG;
+      const apiKeyInput = document.getElementById('fb-api-key');
+      const projIdInput = document.getElementById('fb-project-id');
+      const userIdInput = document.getElementById('fb-user-id');
+      if (apiKeyInput) apiKeyInput.value = cfg.apiKey || '';
+      if (projIdInput) projIdInput.value = cfg.projectId || '';
+      if (userIdInput) userIdInput.value = cfg.userId || '';
+      document.getElementById('cloud-modal')?.classList.remove('hidden');
     }
 
     function closeCloudModal() {
@@ -1374,32 +1349,33 @@
 
     function saveFirebaseConfig(e) {
       e.preventDefault();
-      const apiKey = document.getElementById('fb-api-key').value.trim();
-      const projectId = document.getElementById('fb-project-id').value.trim();
-      const userId = document.getElementById('fb-user-id').value.trim();
+      const apiKey = document.getElementById('fb-api-key')?.value.trim();
+      const projectId = document.getElementById('fb-project-id')?.value.trim();
+      const userId = document.getElementById('fb-user-id')?.value.trim();
 
       if (!userId) {
-        showToast('გთხოვთ შეიყვანოთ პირადი სინქრონიზაციის ID', true);
+        showToast('გთხოვთ მიუთითოთ პირადი User ID', true);
         return;
       }
 
-      const cfg = { apiKey, projectId, userId };
+      const cfg = {
+        apiKey: apiKey || DEFAULT_FB_CONFIG.apiKey,
+        projectId: projectId || DEFAULT_FB_CONFIG.projectId,
+        userId: userId
+      };
+
       localStorage.setItem('lc_fb_config', JSON.stringify(cfg));
       closeCloudModal();
+      showToast('კონფიგურაცია შენახულია, უკავშირდება...');
       initFirebase();
-      showToast('Firebase კონფიგურაცია განახლდა!');
     }
 
     function disconnectFirebase() {
-      if (firebaseUnsubscribe) {
-        firebaseUnsubscribe();
-        firebaseUnsubscribe = null;
-      }
-      firebaseDb = null;
-      localStorage.removeItem('lc_fb_config');
-      updateCloudStatusUI('disconnected', 'ლოკალური');
+      userDocRef = null;
+      db = null;
+      updateCloudStatusUI('disconnected', 'გათიშული');
       closeCloudModal();
-      showToast('Firebase სინქრონიზაცია გაითიშა');
+      showToast('Firebase გაითიშა');
     }
 
     function openBackupModal() {
@@ -1411,141 +1387,129 @@
     }
 
     function exportToJSON() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ words, groups }, null, 2));
-      const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
-      downloadAnchor.setAttribute("download", `linguacraft_backup_${new Date().toISOString().slice(0, 10)}.json`);
-      document.body.appendChild(downloadAnchor);
-      downloadAnchor.click();
-      downloadAnchor.remove();
-      showToast('JSON ბექაპი ჩამოიტვირთა');
+      const dataStr = JSON.stringify({ words, groups, exportDate: new Date().toISOString() }, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `linguacraft_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('JSON ბექაპი გადმოწერილია');
     }
 
     function exportToCSV() {
-      let csv = "English,Georgian,Level,Group,Status,Example,Example Translation,Notes\n";
+      let csv = 'English,Georgian,Level,Group,Status,Example,Example Translation,Notes\n';
       words.forEach(w => {
         const row = [
           `"${(w.en || '').replace(/"/g, '""')}"`,
           `"${(w.ge || '').replace(/"/g, '""')}"`,
-          `"${(w.level || '').replace(/"/g, '""')}"`,
-          `"${(w.group || '').replace(/"/g, '""')}"`,
-          `"${(w.status || '').replace(/"/g, '""')}"`,
+          `"${w.level || 'B1'}"`,
+          `"${w.group || 'routine'}"`,
+          `"${w.status || 'learning'}"`,
           `"${(w.example || '').replace(/"/g, '""')}"`,
           `"${(w.exampleTranslation || '').replace(/"/g, '""')}"`,
           `"${(w.notes || '').replace(/"/g, '""')}"`
         ];
-        csv += row.join(",") + "\n";
+        csv += row.join(',') + '\n';
       });
-      const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `linguacraft_words_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      showToast('CSV ფაილი ჩამოიტვირთა');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `linguacraft_words_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('CSV ფაილი გადმოწერილია');
     }
 
     function importFromJSON(e) {
-      const file = e.target.files[0];
+      const file = e.target.files?.[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = (evt) => {
         try {
-          const parsed = JSON.parse(event.target.result);
+          const parsed = JSON.parse(evt.target.result);
           if (Array.isArray(parsed.words)) {
-            words = parsed.words;
+            words = sanitizeWordsForCloud(parsed.words);
             if (Array.isArray(parsed.groups)) groups = parsed.groups;
             saveToLocalStorage();
-            populateGroupSelects();
             renderWords();
-            renderGroupsList();
+            updateStats();
             closeBackupModal();
-            showToast('მონაცემები წარმატებით აღდგა!');
+            showToast(`წარმატებით იმპორტირდა ${words.length} სიტყვა!`);
           } else {
-            showToast('არასწორი ფაილის ფორმატი', true);
+            showToast('ფაილის ფორმატი არასწორია', true);
           }
         } catch (err) {
-          showToast('ფაილის წაკითხვა ვერ მოხერხდა', true);
+          showToast('შეცდომა ფაილის წაკითხვისას', true);
         }
       };
       reader.readAsText(file);
     }
 
-    /* Speed Quiz Logic */
+    /* Speed Quiz Helpers */
     function initSpeedQuiz() {
+      const activeList = words.length >= 4 ? words : INITIAL_WORDS;
+      const randIdx = Math.floor(Math.random() * activeList.length);
+      currentQuizWord = activeList[randIdx];
+
       const qWordEl = document.getElementById('quiz-question-word');
-      const gridEl = document.getElementById('quiz-options-grid');
-      const feedbackEl = document.getElementById('quiz-feedback');
-      if (!qWordEl || !gridEl) return;
+      const scoreEl = document.getElementById('quiz-score');
+      const fbEl = document.getElementById('quiz-feedback');
+      const grid = document.getElementById('quiz-options-grid');
 
-      if (words.length < 4) {
-        qWordEl.textContent = 'საკმარისი სიტყვები არ არის';
-        gridEl.innerHTML = '';
-        return;
-      }
+      if (qWordEl) qWordEl.textContent = currentQuizWord.en;
+      if (scoreEl) scoreEl.textContent = quizScore;
+      if (fbEl) fbEl.innerHTML = '';
+      if (!grid) return;
 
-      if (feedbackEl) feedbackEl.innerHTML = '';
+      const wrongOptions = activeList
+        .filter(w => w.en !== currentQuizWord.en)
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 3)
+        .map(w => w.ge);
 
-      const randomIndex = Math.floor(Math.random() * words.length);
-      currentQuizWord = words[randomIndex];
-      qWordEl.textContent = currentQuizWord.en;
+      const options = [currentQuizWord.ge, ...wrongOptions].sort(() => Math.random() - 0.5);
 
-      // Pick 3 random distractors
-      const distractors = [];
-      while (distractors.length < 3) {
-        const rand = words[Math.floor(Math.random() * words.length)];
-        if (rand.id !== currentQuizWord.id && !distractors.some(d => d.ge === rand.ge)) {
-          distractors.push(rand);
-        }
-      }
-
-      const options = [currentQuizWord, ...distractors].sort(() => Math.random() - 0.5);
-
-      gridEl.innerHTML = options.map(opt => `
-        <button onclick="handleQuizAnswer('${escapeHtml(opt.ge)}', this)" class="p-3.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 transition text-left">
-          ${escapeHtml(opt.ge)}
+      grid.innerHTML = options.map(opt => `
+        <button onclick="handleQuizAnswer('${escapeHtml(opt)}')" class="quiz-btn p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 transition text-left">
+          ${escapeHtml(opt)}
         </button>
       `).join('');
     }
 
-    function handleQuizAnswer(selectedGe, btnElement) {
-      const feedbackEl = document.getElementById('quiz-feedback');
-      const scoreEl = document.getElementById('quiz-score');
-      const buttons = document.querySelectorAll('#quiz-options-grid button');
-      buttons.forEach(b => b.classList.add('pointer-events-none'));
+    function handleQuizAnswer(selectedGe) {
+      if (!currentQuizWord) return;
+      const fb = document.getElementById('quiz-feedback');
+      const isCorrect = selectedGe === currentQuizWord.ge;
 
-      if (selectedGe === currentQuizWord.ge) {
-        btnElement.classList.remove('bg-slate-100', 'dark:bg-slate-800');
-        btnElement.classList.add('bg-emerald-600', 'text-white', 'border-emerald-600');
+      if (isCorrect) {
         quizScore += 10;
-        if (scoreEl) scoreEl.textContent = quizScore;
-        if (feedbackEl) feedbackEl.innerHTML = '<span class="text-emerald-500 font-bold">🎉 სწორია! (+10 ქულა)</span>';
+        if (fb) fb.innerHTML = '<span class="text-emerald-500">🎉 სწორია! (+10 ქულა)</span>';
         speakText(currentQuizWord.en);
       } else {
-        btnElement.classList.remove('bg-slate-100', 'dark:bg-slate-800');
-        btnElement.classList.add('bg-rose-600', 'text-white', 'border-rose-600');
-        if (feedbackEl) feedbackEl.innerHTML = `<span class="text-rose-500 font-bold">❌ არასწორია. სწორი პასუხია: "${currentQuizWord.ge}"</span>`;
+        quizScore = Math.max(0, quizScore - 5);
+        if (fb) fb.innerHTML = `<span class="text-rose-500">❌ შეცდომაა. სწორია: "${currentQuizWord.ge}"</span>`;
       }
 
-      setTimeout(() => {
-        initSpeedQuiz();
-      }, 1600);
+      document.querySelectorAll('.quiz-btn').forEach(b => b.classList.add('pointer-events-none'));
+      setTimeout(initSpeedQuiz, 1600);
     }
 
     function speakQuizWord() {
       if (currentQuizWord) speakText(currentQuizWord.en);
     }
 
+    /* AI Grammar & Writing Assistant */
     async function checkUserWriting() {
-      const input = document.getElementById('input-check-text');
-      const text = input ? input.value.trim() : '';
+      const textarea = document.getElementById('input-check-text');
+      const text = textarea ? textarea.value.trim() : '';
       const loading = document.getElementById('writing-check-loading');
       const resultBox = document.getElementById('writing-check-result');
 
       if (!text) {
-        showToast('გთხოვთ ჩაწეროთ წინადადება შესამოწმებლად', true);
+        showToast('გთხოვთ შეიყვანოთ ინგლისური წინადადება', true);
         return;
       }
 
@@ -1555,19 +1519,20 @@
         resultBox.innerHTML = '';
       }
 
-      let checkData = null;
+      let analysis = null;
 
       try {
         const apiKey = "";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
-        const prompt = `Analyze and correct this English sentence for a Georgian learner: "${text}".
-Return strictly valid JSON:
+        const prompt = `Analyze this sentence written by an English learner: "${text}".
+Explain grammar corrections, word order, and more natural idiomatic alternatives in Georgian.
+Respond in JSON:
 {
-  "isCorrect": false,
-  "corrected": "I agree with you because this issue makes me feel confused.",
-  "explanationGe": "1. 'I am agree' არის ხშირი შეცდომა; სწორია 'I agree'. 2. 'this problem' არის მხოლობითი, ამიტომ ზმნას სჭირდება 'makes'. 3. 'feel confuse' -> 'feel confused'.",
-  "betterAlternative": "I see your point completely, though this situation is quite perplexing."
+  "corrected": "...",
+  "georgianMeaning": "...",
+  "feedback": "...",
+  "improvements": ["...", "..."]
 }`;
 
         const resp = await fetch(apiUrl, {
@@ -1582,48 +1547,44 @@ Return strictly valid JSON:
         if (resp.ok) {
           const resJson = await resp.json();
           const parsed = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (parsed) checkData = JSON.parse(parsed);
+          if (parsed) analysis = JSON.parse(parsed);
         }
       } catch (e) {
-        console.warn('Writing check API fallback:', e);
+        console.debug('AI check fallback:', e);
       }
 
-      if (!checkData) {
-        checkData = {
-          isCorrect: false,
-          corrected: "I agree with your perspective, and we should proceed carefully.",
-          explanationGe: "წინადადების გრამატიკა და სიტყვათა წყობა გადამოწმდა. გახსოვდეთ: ზმნის ფორმა და დროები შეათანხმეთ ქვემდებარესთან.",
-          betterAlternative: "I completely share your point of view on this matter."
+      if (!analysis) {
+        analysis = {
+          corrected: text,
+          georgianMeaning: "წინადადების ანალიზი",
+          feedback: "წინადადება გრამატიკულად გასაგებია. გამოიყენეთ მეტი ბუნებრივი სიტყვათწყობა.",
+          improvements: ["შეეცადეთ გამოიყენოთ შესაბამისი ფრაზული ზმნები."]
         };
       }
 
       if (loading) loading.classList.add('hidden');
       if (resultBox) {
-        resultBox.classList.remove('hidden');
         resultBox.innerHTML = `
-          <div class="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 space-y-3 text-xs sm:text-sm">
-            <div class="flex items-center justify-between">
-              <span class="font-bold text-slate-700 dark:text-slate-300">გასწორებული ვერსია:</span>
-              <button onclick="speakText('${escapeHtml(checkData.corrected)}')" class="text-indigo-500 hover:text-indigo-600"><i class="fa-solid fa-volume-high"></i> მოსმენა</button>
-            </div>
-            <p class="text-emerald-600 dark:text-emerald-400 font-bold text-sm">"${escapeHtml(checkData.corrected)}"</p>
-            <div class="pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-slate-600 dark:text-slate-300">
-              <span class="font-bold text-slate-800 dark:text-white">ახსნა ქართულად:</span>
-              <p class="mt-1">${escapeHtml(checkData.explanationGe)}</p>
-            </div>
-            ${checkData.betterAlternative ? `
-              <div class="pt-2 border-t border-slate-200/50 dark:border-slate-700/50 text-slate-500">
-                <span class="font-semibold text-slate-700 dark:text-slate-300">უფრო ბუნებრივი/C1 ალტერნატივა:</span>
-                <p class="text-indigo-600 dark:text-indigo-400 font-medium mt-0.5">"${escapeHtml(checkData.betterAlternative)}"</p>
-              </div>
+          <div class="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2">
+            <span class="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400">შესწორებული ვერსია</span>
+            <p class="text-base font-black text-slate-900 dark:text-white">${escapeHtml(analysis.corrected)}</p>
+            <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">${escapeHtml(analysis.georgianMeaning)}</p>
+          </div>
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 text-xs space-y-2 border border-slate-200 dark:border-slate-700">
+            <p class="text-slate-700 dark:text-slate-300 font-medium">${escapeHtml(analysis.feedback)}</p>
+            ${analysis.improvements ? `
+              <ul class="list-disc list-inside text-slate-500 space-y-1 pt-1">
+                ${analysis.improvements.map(imp => `<li>${escapeHtml(imp)}</li>`).join('')}
+              </ul>
             ` : ''}
           </div>
         `;
+        resultBox.classList.remove('hidden');
       }
     }
 
     /* ========================================================
-       INIT & PERSISTENCE
+       INIT & PERSISTENCE (PURE CLOUD FIRESTORE)
        ======================================================== */
     const DEFAULT_FB_CONFIG = {
       apiKey: "AIzaSyDHQf_fpaMjP7t-CnnNpA2yVSrW0VwtW34",
@@ -1649,7 +1610,6 @@ Return strictly valid JSON:
     // Window Scroll Listener for Smooth Automatic Infinite Scroll
     function setupInfiniteScroll() {
       window.addEventListener('scroll', () => {
-        // Only trigger when on vocab tab
         const vocabTab = document.getElementById('tab-vocab');
         if (!vocabTab || vocabTab.classList.contains('hidden')) return;
 
@@ -1678,99 +1638,48 @@ Return strictly valid JSON:
       }
 
       try {
-        if (typeof firebase !== 'undefined' && firebase.firestore) {
-          firebase.firestore.setLogLevel('silent');
-        }
+        updateCloudStatusUI('syncing', 'კავშირი...');
 
         if (!firebase.apps.length) {
           firebase.initializeApp({
             apiKey: cfg.apiKey,
             projectId: cfg.projectId,
-            authDomain: `${cfg.projectId}.firebaseapp.com`,
+            authDomain: `${cfg.projectId}.firebaseapp.com`
           });
         }
 
-        // Anonymous auth with silent error tolerance
+        db = firebase.firestore();
+        // Use standard settings without conflicting experimental polling options
+        db.settings({ experimentalAutoDetectLongPolling: true });
+
         try {
-          if (firebase.auth && !firebase.auth().currentUser) {
-            await firebase.auth().signInAnonymously();
-          }
+          await firebase.auth().signInAnonymously();
         } catch (authErr) {
-          console.debug('Auth info:', authErr);
-        }
-        
-        firebaseDb = firebase.firestore();
-        
-        updateCloudStatusUI('syncing', 'კავშირი...');
-        const userDocRef = firebaseDb.collection('linguacraft_users').doc(cfg.userId);
-        
-        if (firebaseUnsubscribe) {
-          firebaseUnsubscribe();
-          firebaseUnsubscribe = null;
+          console.debug('Auth notice:', authErr);
         }
 
-        // Direct fetch first to avoid stream hangs
-        try {
-          const initialSnap = await userDocRef.get();
-          if (!initialSnap.exists) {
-            const cleanBaseline = sanitizeWordsForCloud(words);
-            await userDocRef.set({
-              words: cleanBaseline,
-              groups: groups,
-              lastUpdated: new Date().toISOString()
-            });
-            updateCloudStatusUI('connected', 'Cloud აქტიურია');
-          } else {
-            const data = initialSnap.data();
-            if (data && Array.isArray(data.words)) {
-              mergeServerWords(data.words);
-              if (Array.isArray(data.groups) && data.groups.length > 0) {
-                groups = data.groups;
-                localStorage.setItem('lc_groups', JSON.stringify(groups));
-                populateGroupSelects();
-              }
-              updateCloudStatusUI('connected', 'Cloud აქტიურია');
-            }
-          }
-        } catch (initialErr) {
-          console.warn('Initial direct fetch failed, trying realtime fallback:', initialErr);
-        }
+        userDocRef = db.collection('linguacraft_users').doc(cfg.userId);
 
-        // Realtime Listener with resilient error recovery
-        firebaseUnsubscribe = userDocRef.onSnapshot((docSnap) => {
-          if (!docSnap || !docSnap.exists) return;
-
-          if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
-            return;
-          }
-
+        // Fetch data
+        const docSnap = await userDocRef.get();
+        if (docSnap.exists) {
           const data = docSnap.data();
-          if (data && Array.isArray(data.words)) {
+          if (data && Array.isArray(data.words) && data.words.length > 0) {
             mergeServerWords(data.words);
-            if (Array.isArray(data.groups) && data.groups.length > 0) {
-              groups = data.groups;
-              localStorage.setItem('lc_groups', JSON.stringify(groups));
-              populateGroupSelects();
-              renderGroupsList();
-            }
-            updateCloudStatusUI('connected', 'Cloud აქტიურია');
+          } else {
+            // First time seeding on empty doc
+            await syncToFirebaseDirect();
           }
-        }, (err) => {
-          console.warn('Realtime sync warning (retrying automatically in 10s):', err);
-          updateCloudStatusUI('connected', 'Cloud (ოფლაინ ქეში)');
-          if (reconnectTimeout) clearTimeout(reconnectTimeout);
-          reconnectTimeout = setTimeout(() => {
-            initFirebase();
-          }, 10000);
-        });
+        } else {
+          // Document does not exist yet -> create it now!
+          await syncToFirebaseDirect();
+        }
+
+        updateCloudStatusUI('connected', 'Cloud აქტიურია');
 
       } catch (err) {
-        console.error('Firebase Init Error:', err);
-        updateCloudStatusUI('disconnected', 'ლოკალური რეჟიმი');
-        if (reconnectTimeout) clearTimeout(reconnectTimeout);
-        reconnectTimeout = setTimeout(() => {
-          initFirebase();
-        }, 15000);
+        console.error('Firestore init error:', err);
+        updateCloudStatusUI('connected', 'Cloud (ოფლაინ)');
       }
     }
 
@@ -1796,16 +1705,13 @@ Return strictly valid JSON:
     }
 
     async function syncToFirebaseDirect() {
-      if (!firebaseDb) return;
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
-      if (!cfg.userId) return;
+      if (!userDocRef) return false;
 
       try {
         updateCloudStatusUI('syncing', 'ინახება...');
-
         const cleanWords = sanitizeWordsForCloud(words);
 
-        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+        await userDocRef.set({
           words: cleanWords,
           groups: groups,
           lastUpdated: new Date().toISOString()
@@ -1814,19 +1720,17 @@ Return strictly valid JSON:
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
         return true;
       } catch (err) {
-        console.error('Direct sync failed:', err);
-        updateCloudStatusUI('connected', 'Cloud (ოფლაინ შენახვა)');
+        console.error('Firestore direct sync error:', err);
+        updateCloudStatusUI('connected', 'Cloud (ლოკალური)');
         return false;
       }
     }
 
     async function forcePushAllToFirebase() {
-      if (!firebaseDb) {
+      if (!userDocRef) {
         showToast('Firebase ჯერ არ არის დაკავშირებული', true);
-        return;
+        return false;
       }
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
-      if (!cfg.userId) return;
 
       try {
         updateCloudStatusUI('syncing', 'ინახება...');
@@ -1834,11 +1738,11 @@ Return strictly valid JSON:
         
         const currentCleanWords = sanitizeWordsForCloud(words);
 
-        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+        await userDocRef.set({
           words: currentCleanWords,
           groups: groups,
           lastUpdated: new Date().toISOString()
-        }, { merge: true });
+        });
         
         words = currentCleanWords;
         localStorage.setItem('lc_words', JSON.stringify(words));
@@ -1846,23 +1750,13 @@ Return strictly valid JSON:
         renderWords();
         updateStats();
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
-        showToast(`✅ ${words.length} სიტყვა წარმატებით შენახულია ღრუბელში!`);
+        showToast(`✅ ${words.length} სიტყვა წარმატებით შენახულია Cloud-ში!`);
         return true;
       } catch (err) {
         console.error('Force push failed:', err);
-        showToast('ატვირთვა ვერ მოხერხდა: ' + (err.message || err.code), true);
-        updateCloudStatusUI('disconnected', 'შეცდომა');
+        showToast('ატვირთვა ვერ მოხერხდა: ' + (err.message || ''), true);
         return false;
       }
-    }
-
-    let syncTimeoutTimer = null;
-    function syncToFirebase() {
-      if (!firebaseDb) return;
-      if (syncTimeoutTimer) clearTimeout(syncTimeoutTimer);
-      syncTimeoutTimer = setTimeout(() => {
-        syncToFirebaseDirect();
-      }, 400);
     }
 
     async function saveWord(e) {
@@ -1905,18 +1799,17 @@ Return strictly valid JSON:
         });
       }
 
-      // Save locally first
+      // 1. Instant local persistence
       localStorage.setItem('lc_words', JSON.stringify(words));
-      localStorage.setItem('lc_groups', JSON.stringify(groups));
       updateStats();
       renderWords();
       closeWordModal();
 
-      // Directly push to Firebase Cloud and await confirmation
+      // 2. Direct Firestore Sync
       showToast('ინახება Google Cloud-ში...');
       const success = await syncToFirebaseDirect();
       if (success) {
-        showToast('✅ სიტყვა შენახულია და დასინქრონდა ღრუბელში!');
+        showToast('✅ სიტყვა წარმატებით შეინახა Cloud-ში!');
       }
     }
 
@@ -1928,7 +1821,7 @@ Return strictly valid JSON:
       updateStats();
       renderWords();
       syncToFirebaseDirect().then(() => {
-        showToast('სიტყვა წაიშალა და სინქრონიზდა ღრუბელში');
+        showToast('სიტყვა წაიშალა და განახლდა Cloud-ში');
       });
     }
 
