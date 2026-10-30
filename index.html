@@ -1203,13 +1203,37 @@
           if (docSnap && docSnap.exists) {
             const data = docSnap.data();
             if (data && Array.isArray(data.words) && data.words.length > 0) {
-              words = data.words;
-              if (Array.isArray(data.groups)) groups = data.groups;
+              // SMART MERGE: Keep locally added words so a refresh never deletes them!
+              const remoteWords = data.words;
+              const localWords = JSON.parse(localStorage.getItem('lc_words')) || words;
+              
+              const mergedMap = new Map();
+              // First put remote words
+              remoteWords.forEach(w => { if (w && w.id) mergedMap.set(w.id, w); });
+              // Then overlay/add local words (so new words or status changes won't be lost)
+              localWords.forEach(w => { if (w && w.id) mergedMap.set(w.id, w); });
+              
+              words = Array.from(mergedMap.values());
+              if (Array.isArray(data.groups) && data.groups.length > 0) {
+                const groupMap = new Map();
+                data.groups.forEach(g => groupMap.set(g.id, g));
+                groups.forEach(g => groupMap.set(g.id, g));
+                groups = Array.from(groupMap.values());
+              }
               localStorage.setItem('lc_words', JSON.stringify(words));
               localStorage.setItem('lc_groups', JSON.stringify(groups));
               renderWords();
               updateStats();
               populateGroupSelects();
+              
+              // If local had more words, update cloud immediately
+              if (words.length > remoteWords.length) {
+                userDocRef.set({
+                  words: words,
+                  groups: groups,
+                  lastUpdated: new Date().toISOString()
+                }, { merge: true }).catch(() => {});
+              }
             }
           } else {
             userDocRef.set({
@@ -1236,13 +1260,13 @@
 
       try {
         isCloudSyncing = true;
-        updateCloudStatusUI('syncing');
+        updateCloudStatusUI('syncing', 'ინახება...');
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
           words: words,
           groups: groups,
           lastUpdated: new Date().toISOString()
         }, { merge: true });
-        updateCloudStatusUI('connected', 'სინქრონიზებულია');
+        updateCloudStatusUI('connected', 'Cloud აქტიურია');
       } catch (err) {
         console.warn('Firebase save error:', err);
         updateCloudStatusUI('connected', 'Cloud მზადაა');
