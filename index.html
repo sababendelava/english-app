@@ -1690,8 +1690,16 @@ Return strictly valid JSON:
           if (docSnap && docSnap.exists) {
             const data = docSnap.data();
             if (data && Array.isArray(data.words) && data.words.length > 0) {
-              // Merge remote words with local state
-              words = data.words;
+              // Deduplicate words by English phrase to prevent ballooning
+              const uniqueMap = new Map();
+              data.words.forEach(w => {
+                const key = (w.en || '').trim().toLowerCase();
+                if (key && !uniqueMap.has(key)) {
+                  uniqueMap.set(key, w);
+                }
+              });
+
+              words = Array.from(uniqueMap.values());
               localStorage.setItem('lc_words', JSON.stringify(words));
               
               if (Array.isArray(data.groups) && data.groups.length > 0) {
@@ -1711,7 +1719,7 @@ Return strictly valid JSON:
             }
           } else {
             // First time connection or document was deleted: Upload initial 300 words right away!
-            console.log('Document not found or empty, creating with initial 300 words...');
+            console.log('Document not found or empty, creating with initial 300 clean words...');
             forcePushAllToFirebase();
           }
           updateCloudStatusUI('connected', 'Cloud აქტიურია');
@@ -1735,11 +1743,23 @@ Return strictly valid JSON:
 
       try {
         updateCloudStatusUI('syncing', 'ინახება...');
+
+        // Deduplicate before saving
+        const uniqueMap = new Map();
+        words.forEach(w => {
+          const key = (w.en || '').trim().toLowerCase();
+          if (key && !uniqueMap.has(key)) {
+            uniqueMap.set(key, w);
+          }
+        });
+        const cleanWords = Array.from(uniqueMap.values());
+
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
-          words: words,
+          words: cleanWords,
           groups: groups,
           lastUpdated: new Date().toISOString()
         }, { merge: true });
+
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
         return true;
       } catch (err) {
@@ -1760,22 +1780,36 @@ Return strictly valid JSON:
 
       try {
         updateCloudStatusUI('syncing', 'იტვირთება 300...');
-        showToast('მთელი ბაზა იგზავნება Google Cloud-ში...');
+        showToast('სუფთა 300 სიტყვა იგზავნება Google Cloud-ში...');
         
-        // Ensure we upload full set of words
-        const payloadWords = words.length > 0 ? words : INITIAL_WORDS;
+        // Strict deduplication against initial 300
+        const uniqueMap = new Map();
+        INITIAL_WORDS.forEach(w => {
+          const key = (w.en || '').trim().toLowerCase();
+          if (key && !uniqueMap.has(key)) {
+            uniqueMap.set(key, w);
+          }
+        });
+        const cleanBaseline = Array.from(uniqueMap.values());
+
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
-          words: payloadWords,
-          groups: groups,
+          words: cleanBaseline,
+          groups: DEFAULT_GROUPS,
           lastUpdated: new Date().toISOString()
         });
         
-        words = payloadWords;
+        words = cleanBaseline;
+        groups = DEFAULT_GROUPS;
         localStorage.setItem('lc_words', JSON.stringify(words));
+        localStorage.setItem('lc_groups', JSON.stringify(groups));
+
+        populateGroupSelects();
+        renderGroupsList();
         renderWords();
         updateStats();
+        initPracticeFlashcards();
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
-        showToast('✅ 300-ვე სიტყვა წარმატებით აიტვირთა Firebase-ში!');
+        showToast('✅ სუფთა 300 სიტყვა წარმატებით აიტვირთა Firebase-ში!');
         return true;
       } catch (err) {
         console.error('Force push failed:', err);
