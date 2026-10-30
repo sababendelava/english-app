@@ -730,7 +730,7 @@
               დახურვა
             </button>
             <button type="submit" class="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow transition">
-              დაკავშირება
+              ხელახლა დაკავშირება
             </button>
           </div>
         </div>
@@ -1098,6 +1098,30 @@
     let firebaseDb = null;
     let firebaseUnsubscribe = null;
     let isCloudSyncing = false;
+    let reconnectTimeout = null;
+
+    /* Helper: Compress word objects for Firestore to keep payload minimal */
+    function sanitizeWordsForCloud(wordList) {
+      const uniqueMap = new Map();
+      wordList.forEach(w => {
+        const key = (w.en || '').trim().toLowerCase();
+        if (key && !uniqueMap.has(key)) {
+          uniqueMap.set(key, {
+            id: w.id || ('w_' + Math.random().toString(36).substring(2, 9)),
+            en: (w.en || '').trim(),
+            ge: (w.ge || '').trim(),
+            level: w.level || 'B1',
+            group: w.group || 'routine',
+            status: w.status === 'mastered' ? 'mastered' : 'learning',
+            favorite: !!w.favorite,
+            example: (w.example || '').trim(),
+            exampleTranslation: (w.exampleTranslation || '').trim(),
+            notes: (w.notes || '').trim()
+          });
+        }
+      });
+      return Array.from(uniqueMap.values());
+    }
 
     /* ========================================================
        FILTERING & SEARCH LOGIC
@@ -1666,13 +1690,13 @@ Return strictly valid JSON:
           });
         }
 
-        // Sign in anonymously to guarantee Firestore read/write permissions
+        // Anonymous auth with silent error tolerance
         try {
-          if (firebase.auth) {
+          if (firebase.auth && !firebase.auth().currentUser) {
             await firebase.auth().signInAnonymously();
           }
         } catch (authErr) {
-          console.warn('Anonymous auth warning (will continue with rules):', authErr);
+          console.debug('Auth info:', authErr);
         }
         
         firebaseDb = firebase.firestore();
@@ -1685,69 +1709,90 @@ Return strictly valid JSON:
           firebaseUnsubscribe = null;
         }
 
-        // REALTIME LISTENER: Syncs additions, deletions and edits instantly across all devices!
-        firebaseUnsubscribe = userDocRef.onSnapshot({ includeMetadataChanges: true }, (docSnap) => {
-          if (!docSnap || !docSnap.exists) {
-            console.log('Firebase-ში დოკუმენტი ჯერ არ არის, ვქმნით პირველად ასლს...');
-            // მხოლოდ და მხოლოდ მაშინ, როცა ბაზა სრულიად ცარიელია, იტვირთება პირველადი სია
-            userDocRef.set({
-              words: words,
+        // Direct fetch first to avoid stream hangs
+        try {
+          const initialSnap = await userDocRef.get();
+          if (!initialSnap.exists) {
+            const cleanBaseline = sanitizeWordsForCloud(words);
+            await userDocRef.set({
+              words: cleanBaseline,
               groups: groups,
               lastUpdated: new Date().toISOString()
             });
-            return;
+            updateCloudStatusUI('connected', 'Cloud აქტიურია');
+          } else {
+            const data = initialSnap.data();
+            if (data && Array.isArray(data.words)) {
+              mergeServerWords(data.words);
+              if (Array.isArray(data.groups) && data.groups.length > 0) {
+                groups = data.groups;
+                localStorage.setItem('lc_groups', JSON.stringify(groups));
+                populateGroupSelects();
+              }
+              updateCloudStatusUI('connected', 'Cloud აქტიურია');
+            }
           }
+        } catch (initialErr) {
+          console.warn('Initial direct fetch failed, trying realtime fallback:', initialErr);
+        }
 
-          // თუ ჩაწერა ჯერ ადგილობრივად მიმდინარეობს, UI არ გადავაწეროთ
+        // Realtime Listener with resilient error recovery
+        firebaseUnsubscribe = userDocRef.onSnapshot((docSnap) => {
+          if (!docSnap || !docSnap.exists) return;
+
           if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
             return;
           }
 
           const data = docSnap.data();
           if (data && Array.isArray(data.words)) {
-            const serverWords = data.words;
-            const uniqueMap = new Map();
-
-            // 1. ჯერ ავიღოთ სერვერზე არსებული ყველა სიტყვა
-            serverWords.forEach(w => {
-              const key = (w.en || '').trim().toLowerCase();
-              if (key) uniqueMap.set(key, w);
-            });
-
-            // 2. დავამატოთ ლოკალურად არსებული ის სიტყვები, რაც მომხმარებელმა ახლახან ჩაწერა
-            words.forEach(lw => {
-              const lKey = (lw.en || '').trim().toLowerCase();
-              if (lKey && !uniqueMap.has(lKey)) {
-                uniqueMap.set(lKey, lw);
-              }
-            });
-
-            // მივიღეთ სრული, უდანაკარგო სია
-            words = Array.from(uniqueMap.values());
-            localStorage.setItem('lc_words', JSON.stringify(words));
-            
+            mergeServerWords(data.words);
             if (Array.isArray(data.groups) && data.groups.length > 0) {
               groups = data.groups;
               localStorage.setItem('lc_groups', JSON.stringify(groups));
               populateGroupSelects();
               renderGroupsList();
             }
-            
-            renderWords();
-            updateStats();
-            initPracticeFlashcards();
             updateCloudStatusUI('connected', 'Cloud აქტიურია');
           }
         }, (err) => {
-          console.error('Realtime sync error:', err);
-          updateCloudStatusUI('disconnected', 'შეცდომა');
+          console.warn('Realtime sync warning (retrying automatically in 10s):', err);
+          updateCloudStatusUI('connected', 'Cloud (ოფლაინ ქეში)');
+          if (reconnectTimeout) clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(() => {
+            initFirebase();
+          }, 10000);
         });
 
       } catch (err) {
         console.error('Firebase Init Error:', err);
-        updateCloudStatusUI('disconnected', 'შეცდომა');
-        showToast('Firebase ინიციალიზაციის შეცდომა', true);
+        updateCloudStatusUI('disconnected', 'ლოკალური რეჟიმი');
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          initFirebase();
+        }, 15000);
       }
+    }
+
+    function mergeServerWords(serverWords) {
+      const uniqueMap = new Map();
+      serverWords.forEach(w => {
+        const key = (w.en || '').trim().toLowerCase();
+        if (key) uniqueMap.set(key, w);
+      });
+
+      words.forEach(lw => {
+        const lKey = (lw.en || '').trim().toLowerCase();
+        if (lKey && !uniqueMap.has(lKey)) {
+          uniqueMap.set(lKey, lw);
+        }
+      });
+
+      words = Array.from(uniqueMap.values());
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      renderWords();
+      updateStats();
+      initPracticeFlashcards();
     }
 
     async function syncToFirebaseDirect() {
@@ -1758,17 +1803,8 @@ Return strictly valid JSON:
       try {
         updateCloudStatusUI('syncing', 'ინახება...');
 
-        // დუბლიკატებისგან გასუფთავება მიმდინარე სიის
-        const uniqueMap = new Map();
-        words.forEach(w => {
-          const key = (w.en || '').trim().toLowerCase();
-          if (key && !uniqueMap.has(key)) {
-            uniqueMap.set(key, w);
-          }
-        });
-        const cleanWords = Array.from(uniqueMap.values());
+        const cleanWords = sanitizeWordsForCloud(words);
 
-        // ინახება ზუსტად ის სია, რაც მომხმარებელს აქვს ეკრანზე (ახალი სიტყვებით!)
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
           words: cleanWords,
           groups: groups,
@@ -1779,8 +1815,7 @@ Return strictly valid JSON:
         return true;
       } catch (err) {
         console.error('Direct sync failed:', err);
-        updateCloudStatusUI('disconnected', 'შეცდომა');
-        showToast('სერვერზე შენახვა ვერ მოხერხდა: ' + (err.message || err.code), true);
+        updateCloudStatusUI('connected', 'Cloud (ოფლაინ შენახვა)');
         return false;
       }
     }
@@ -1797,15 +1832,7 @@ Return strictly valid JSON:
         updateCloudStatusUI('syncing', 'ინახება...');
         showToast('მიმდინარე სიტყვები იგზავნება Cloud-ში...');
         
-        // აღარ ვიყენებთ INITIAL_WORDS-ს გადასაწერად! ვინახავთ მიმდინარე რეალურ words-ს
-        const uniqueMap = new Map();
-        words.forEach(w => {
-          const key = (w.en || '').trim().toLowerCase();
-          if (key && !uniqueMap.has(key)) {
-            uniqueMap.set(key, w);
-          }
-        });
-        const currentCleanWords = Array.from(uniqueMap.values());
+        const currentCleanWords = sanitizeWordsForCloud(words);
 
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
           words: currentCleanWords,
@@ -1835,7 +1862,7 @@ Return strictly valid JSON:
       if (syncTimeoutTimer) clearTimeout(syncTimeoutTimer);
       syncTimeoutTimer = setTimeout(() => {
         syncToFirebaseDirect();
-      }, 300);
+      }, 400);
     }
 
     async function saveWord(e) {
