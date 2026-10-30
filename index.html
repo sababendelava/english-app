@@ -1686,47 +1686,56 @@ Return strictly valid JSON:
         }
 
         // REALTIME LISTENER: Syncs additions, deletions and edits instantly across all devices!
-        firebaseUnsubscribe = userDocRef.onSnapshot((docSnap) => {
-          if (docSnap && docSnap.exists) {
-            const data = docSnap.data();
-            if (data && Array.isArray(data.words) && data.words.length > 0) {
-              // Deduplicate words by English phrase to prevent ballooning
-              const uniqueMap = new Map();
-              data.words.forEach(w => {
-                const key = (w.en || '').trim().toLowerCase();
-                if (key && !uniqueMap.has(key)) {
-                  uniqueMap.set(key, w);
-                }
-              });
-
-              words = Array.from(uniqueMap.values());
-              localStorage.setItem('lc_words', JSON.stringify(words));
-              
-              if (Array.isArray(data.groups) && data.groups.length > 0) {
-                groups = data.groups;
-                localStorage.setItem('lc_groups', JSON.stringify(groups));
-                populateGroupSelects();
-                renderGroupsList();
-              }
-              
-              renderWords();
-              updateStats();
-              initPracticeFlashcards();
-              updateCloudStatusUI('connected', 'Cloud აქტიურია');
-            } else {
-              // Document exists but words array is missing or empty - push baseline
-              forcePushAllToFirebase();
-            }
-          } else {
-            // First time connection or document was deleted: Upload initial 300 words right away!
-            console.log('Document not found or empty, creating with initial 300 clean words...');
+        firebaseUnsubscribe = userDocRef.onSnapshot({ includeMetadataChanges: true }, (docSnap) => {
+          if (!docSnap || !docSnap.exists) {
+            console.log('Document not found or empty, creating baseline...');
             forcePushAllToFirebase();
+            return;
           }
-          updateCloudStatusUI('connected', 'Cloud აქტიურია');
+
+          // If the snapshot has pending local writes, do not overwrite local UI to prevent flicker/disappearing words
+          if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
+            return;
+          }
+
+          const data = docSnap.data();
+          if (data && Array.isArray(data.words) && data.words.length > 0) {
+            const uniqueMap = new Map();
+
+            // First insert incoming server words
+            data.words.forEach(w => {
+              const key = (w.en || '').trim().toLowerCase();
+              if (key && !uniqueMap.has(key)) {
+                uniqueMap.set(key, w);
+              }
+            });
+
+            // Keep any locally created words that haven't synced yet
+            words.forEach(lw => {
+              const lKey = (lw.en || '').trim().toLowerCase();
+              if (lKey && !uniqueMap.has(lKey)) {
+                uniqueMap.set(lKey, lw);
+              }
+            });
+
+            words = Array.from(uniqueMap.values());
+            localStorage.setItem('lc_words', JSON.stringify(words));
+            
+            if (Array.isArray(data.groups) && data.groups.length > 0) {
+              groups = data.groups;
+              localStorage.setItem('lc_groups', JSON.stringify(groups));
+              populateGroupSelects();
+              renderGroupsList();
+            }
+            
+            renderWords();
+            updateStats();
+            initPracticeFlashcards();
+            updateCloudStatusUI('connected', 'Cloud აქტიურია');
+          }
         }, (err) => {
           console.error('Realtime sync error:', err);
           updateCloudStatusUI('disconnected', 'შეცდომა');
-          showToast('Firebase კავშირის შეცდომა: ' + (err.message || err.code), true);
         });
 
       } catch (err) {
@@ -2066,55 +2075,12 @@ Return strictly valid JSON:
       if (e) e.stopPropagation();
       words = words.filter(w => w.id !== id);
       selectedForAI.delete(id);
-      saveToLocalStorage();
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      updateStats();
       renderWords();
-      showToast('სიტყვა წაიშალა და სინქრონიზდა');
-    }
-
-    function saveWord(e) {
-      e.preventDefault();
-      const id = document.getElementById('word-id').value;
-      const en = document.getElementById('input-word-en').value.trim();
-      const ge = document.getElementById('input-word-ge').value.trim();
-      const level = document.getElementById('select-word-level').value;
-      const group = document.getElementById('select-word-group').value;
-      const status = document.getElementById('select-word-status').value;
-      const example = document.getElementById('input-word-example').value.trim();
-      const exampleTranslation = document.getElementById('input-word-example-ge').value.trim();
-      const notes = document.getElementById('input-word-notes').value.trim();
-
-      if (!en || !ge) {
-        showToast('გთხოვთ შეავსოთ სავალდებულო ველები', true);
-        return;
-      }
-
-      if (id) {
-        const item = words.find(w => w.id === id);
-        if (item) {
-          item.en = en;
-          item.ge = ge;
-          item.level = level;
-          item.group = group;
-          item.status = status;
-          item.example = example;
-          item.exampleTranslation = exampleTranslation;
-          item.notes = notes;
-        }
-      } else {
-        words.unshift({
-          id: 'w_' + Date.now(),
-          en, ge, level, group, status,
-          favorite: false,
-          example,
-          exampleTranslation,
-          notes
-        });
-      }
-
-      saveToLocalStorage();
-      renderWords();
-      closeWordModal();
-      showToast('სიტყვა შენახულია!');
+      syncToFirebaseDirect().then(() => {
+        showToast('სიტყვა წაიშალა');
+      });
     }
 
     /* ========================================================
