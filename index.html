@@ -29,8 +29,9 @@
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
-  <!-- Google Firebase App & Firestore SDKs -->
+  <!-- Google Firebase App, Auth & Firestore SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
   <script>
@@ -714,6 +715,12 @@
           <p class="text-[10px] text-slate-400 mt-1">ეს ID ჩაწერე როგორც ტელეფონში, ისე კომპიუტერში, რათა ერთმანეთს დაუკავშირდნენ.</p>
         </div>
 
+        <div class="pt-2">
+          <button type="button" onclick="forcePushAllToFirebase()" class="w-full py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-cloud-arrow-up"></i> <span>ბაზის თავიდან ატვირთვა (Force Cloud Reset)</span>
+          </button>
+        </div>
+
         <div class="pt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
           <button type="button" onclick="disconnectFirebase()" class="px-3 py-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition">
             გათიშვა
@@ -1091,6 +1098,54 @@
     let firebaseDb = null;
     let firebaseUnsubscribe = null;
     let isCloudSyncing = false;
+
+    /* ========================================================
+       FILTERING & SEARCH LOGIC
+       ======================================================== */
+    function getFilteredWords() {
+      return words.filter(w => {
+        const matchesLevel = selectedLevel === 'all' || (w.level || 'B1') === selectedLevel;
+        const matchesGroup = selectedGroup === 'all' || w.group === selectedGroup;
+        const q = searchQuery.toLowerCase().trim();
+        const matchesSearch = !q ||
+          (w.en && w.en.toLowerCase().includes(q)) ||
+          (w.ge && w.ge.toLowerCase().includes(q)) ||
+          (w.example && w.example.toLowerCase().includes(q));
+
+        return matchesLevel && matchesGroup && matchesSearch;
+      });
+    }
+
+    function setLevelFilter(lvl) {
+      selectedLevel = lvl;
+      visibleWordsCount = WORDS_PAGE_SIZE;
+
+      const levels = ['all', 'B1', 'B2', 'C1'];
+      levels.forEach(l => {
+        const btn = document.getElementById(`btn-lvl-${l}`);
+        if (!btn) return;
+        if (l === lvl) {
+          btn.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs bg-indigo-600 text-white shadow-sm transition";
+        } else {
+          btn.className = "px-3.5 py-1.5 rounded-xl font-medium text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5";
+        }
+      });
+
+      renderWords();
+    }
+
+    function filterByGroup(groupId) {
+      selectedGroup = groupId;
+      visibleWordsCount = WORDS_PAGE_SIZE;
+      renderWords();
+    }
+
+    function searchWords() {
+      const input = document.getElementById('search-input');
+      searchQuery = input ? input.value : '';
+      visibleWordsCount = WORDS_PAGE_SIZE;
+      renderWords();
+    }
 
     /* ========================================================
        UTILITY & HELPER FUNCTIONS
@@ -1590,6 +1645,7 @@ Return strictly valid JSON:
         renderWords();
       }
     }
+
     async function initFirebase() {
       let cfg = JSON.parse(localStorage.getItem('lc_fb_config') || 'null');
       if (!cfg || !cfg.apiKey || !cfg.projectId || !cfg.userId) {
@@ -1609,6 +1665,15 @@ Return strictly valid JSON:
             authDomain: `${cfg.projectId}.firebaseapp.com`,
           });
         }
+
+        // Sign in anonymously to guarantee Firestore read/write permissions
+        try {
+          if (firebase.auth) {
+            await firebase.auth().signInAnonymously();
+          }
+        } catch (authErr) {
+          console.warn('Anonymous auth warning (will continue with rules):', authErr);
+        }
         
         firebaseDb = firebase.firestore();
         
@@ -1625,6 +1690,7 @@ Return strictly valid JSON:
           if (docSnap && docSnap.exists) {
             const data = docSnap.data();
             if (data && Array.isArray(data.words) && data.words.length > 0) {
+              // Merge remote words with local state
               words = data.words;
               localStorage.setItem('lc_words', JSON.stringify(words));
               
@@ -1639,100 +1705,159 @@ Return strictly valid JSON:
               updateStats();
               initPracticeFlashcards();
               updateCloudStatusUI('connected', 'Cloud აქტიურია');
-            } else if (!data || !Array.isArray(data.words) || data.words.length === 0) {
-              // Remote document exists but is empty, seed it with words
-              userDocRef.set({
-                words: words,
-                groups: groups,
-                lastUpdated: new Date().toISOString()
-              }, { merge: true }).catch(err => console.warn('Baseline seed warning:', err));
+            } else {
+              // Document exists but words array is missing or empty - push baseline
+              forcePushAllToFirebase();
             }
           } else {
-            // First time connection on this user ID, write local baseline to Cloud
-            userDocRef.set({
-              words: words,
-              groups: groups,
-              lastUpdated: new Date().toISOString()
-            }, { merge: true }).catch(err => console.warn('First set warning:', err));
+            // First time connection or document was deleted: Upload initial 300 words right away!
+            console.log('Document not found or empty, creating with initial 300 words...');
+            forcePushAllToFirebase();
           }
           updateCloudStatusUI('connected', 'Cloud აქტიურია');
         }, (err) => {
-          console.warn('Realtime sync fallback:', err);
-          updateCloudStatusUI('connected', 'Cloud მზადაა');
+          console.error('Realtime sync error:', err);
+          updateCloudStatusUI('disconnected', 'შეცდომა');
+          showToast('Firebase კავშირის შეცდომა: ' + (err.message || err.code), true);
         });
 
       } catch (err) {
         console.error('Firebase Init Error:', err);
-        updateCloudStatusUI('disconnected');
+        updateCloudStatusUI('disconnected', 'შეცდომა');
+        showToast('Firebase ინიციალიზაციის შეცდომა', true);
       }
     }
 
-    let syncTimeoutTimer = null;
-    async function syncToFirebase() {
+    async function syncToFirebaseDirect() {
       if (!firebaseDb) return;
       const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
       if (!cfg.userId) return;
 
+      try {
+        updateCloudStatusUI('syncing', 'ინახება...');
+        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+          words: words,
+          groups: groups,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+        updateCloudStatusUI('connected', 'Cloud აქტიურია');
+        return true;
+      } catch (err) {
+        console.error('Direct sync failed:', err);
+        updateCloudStatusUI('disconnected', 'შეცდომა');
+        showToast('სერვერზე შენახვა ვერ მოხერხდა: ' + (err.message || err.code), true);
+        return false;
+      }
+    }
+
+    async function forcePushAllToFirebase() {
+      if (!firebaseDb) {
+        showToast('Firebase ჯერ არ არის დაკავშირებული', true);
+        return;
+      }
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
+      if (!cfg.userId) return;
+
+      try {
+        updateCloudStatusUI('syncing', 'იტვირთება 300...');
+        showToast('მთელი ბაზა იგზავნება Google Cloud-ში...');
+        
+        // Ensure we upload full set of words
+        const payloadWords = words.length > 0 ? words : INITIAL_WORDS;
+        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+          words: payloadWords,
+          groups: groups,
+          lastUpdated: new Date().toISOString()
+        });
+        
+        words = payloadWords;
+        localStorage.setItem('lc_words', JSON.stringify(words));
+        renderWords();
+        updateStats();
+        updateCloudStatusUI('connected', 'Cloud აქტიურია');
+        showToast('✅ 300-ვე სიტყვა წარმატებით აიტვირთა Firebase-ში!');
+        return true;
+      } catch (err) {
+        console.error('Force push failed:', err);
+        showToast('ატვირთვა ვერ მოხერხდა: ' + (err.message || err.code), true);
+        updateCloudStatusUI('disconnected', 'შეცდომა');
+        return false;
+      }
+    }
+
+    let syncTimeoutTimer = null;
+    function syncToFirebase() {
+      if (!firebaseDb) return;
       if (syncTimeoutTimer) clearTimeout(syncTimeoutTimer);
+      syncTimeoutTimer = setTimeout(() => {
+        syncToFirebaseDirect();
+      }, 300);
+    }
 
-      updateCloudStatusUI('syncing', 'ინახება...');
-      syncTimeoutTimer = setTimeout(async () => {
-        try {
-          isCloudSyncing = true;
+    async function saveWord(e) {
+      e.preventDefault();
+      const id = document.getElementById('word-id').value;
+      const en = document.getElementById('input-word-en').value.trim();
+      const ge = document.getElementById('input-word-ge').value.trim();
+      const level = document.getElementById('select-word-level').value;
+      const group = document.getElementById('select-word-group').value;
+      const status = document.getElementById('select-word-status').value;
+      const example = document.getElementById('input-word-example').value.trim();
+      const exampleTranslation = document.getElementById('input-word-example-ge').value.trim();
+      const notes = document.getElementById('input-word-notes').value.trim();
 
-          // Directly write to Firestore
-          await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
-            words: words,
-            groups: groups,
-            lastUpdated: new Date().toISOString()
-          }, { merge: true });
+      if (!en || !ge) {
+        showToast('გთხოვთ შეავსოთ სავალდებულო ველები', true);
+        return;
+      }
 
-          updateCloudStatusUI('connected', 'Cloud აქტიურია');
-        } catch (err) {
-          console.warn('Firebase sync warning:', err);
-          updateCloudStatusUI('connected', 'Cloud მზადაა');
-        } finally {
-          isCloudSyncing = false;
+      if (id) {
+        const item = words.find(w => w.id === id);
+        if (item) {
+          item.en = en;
+          item.ge = ge;
+          item.level = level;
+          item.group = group;
+          item.status = status;
+          item.example = example;
+          item.exampleTranslation = exampleTranslation;
+          item.notes = notes;
         }
-      }, 250);
-    }
-    function setLevelFilter(lvl) {
-      selectedLevel = lvl;
-      visibleWordsCount = WORDS_PAGE_SIZE; // Reset scroll pagination
-      ['all', 'B1', 'B2', 'C1'].forEach(k => {
-        const btn = document.getElementById(`btn-lvl-${k}`);
-        if (!btn) return;
-        if (k === lvl) {
-          btn.className = "px-3.5 py-1.5 rounded-xl font-bold text-xs bg-indigo-600 text-white shadow-sm transition";
-        } else {
-          btn.className = "px-3.5 py-1.5 rounded-xl font-medium text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition flex items-center gap-1.5";
-        }
-      });
+      } else {
+        words.unshift({
+          id: 'w_' + Date.now(),
+          en, ge, level, group, status,
+          favorite: false,
+          example,
+          exampleTranslation,
+          notes
+        });
+      }
+
+      // Save locally first
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      localStorage.setItem('lc_groups', JSON.stringify(groups));
+      updateStats();
       renderWords();
+      closeWordModal();
+
+      // Directly push to Firebase Cloud and await confirmation
+      showToast('ინახება Google Cloud-ში...');
+      const success = await syncToFirebaseDirect();
+      if (success) {
+        showToast('✅ სიტყვა შენახულია და დასინქრონდა ღრუბელში!');
+      }
     }
 
-    function filterByGroup(groupId) {
-      selectedGroup = groupId;
-      visibleWordsCount = WORDS_PAGE_SIZE; // Reset scroll pagination
+    function deleteWord(id, e) {
+      if (e) e.stopPropagation();
+      words = words.filter(w => w.id !== id);
+      selectedForAI.delete(id);
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      updateStats();
       renderWords();
-    }
-
-    function searchWords() {
-      const input = document.getElementById('search-input');
-      searchQuery = input ? input.value.trim().toLowerCase() : '';
-      visibleWordsCount = WORDS_PAGE_SIZE; // Reset scroll pagination
-      renderWords();
-    }
-
-    function getFilteredWords() {
-      return words.filter(w => {
-        const matchesGroup = (selectedGroup === 'all' || w.group === selectedGroup);
-        const matchesLevel = (selectedLevel === 'all' || (w.level || 'B1') === selectedLevel);
-        const matchesQuery = !searchQuery || 
-          (w.en && w.en.toLowerCase().includes(searchQuery)) ||
-          (w.ge && w.ge.toLowerCase().includes(searchQuery)) ||
-          (w.notes && w.notes.toLowerCase().includes(searchQuery));
-        return matchesGroup && matchesLevel && matchesQuery;
+      syncToFirebaseDirect().then(() => {
+        showToast('სიტყვა წაიშალა და სინქრონიზდა ღრუბელში');
       });
     }
 
