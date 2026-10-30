@@ -1176,34 +1176,43 @@
         
         firebaseDb = firebase.firestore();
         
-        // Force long-polling to avoid WebChannel stream timeouts
-        if (typeof firebaseDb.settings === 'function') {
-          try {
-            firebaseDb.settings({
-              experimentalForceLongPolling: true,
-              merge: true
-            });
-          } catch (settingErr) {
-            // Settings already set or cached
-          }
-        }
-
         updateCloudStatusUI('syncing', 'კავშირი...');
         const userDocRef = firebaseDb.collection('linguacraft_users').doc(cfg.userId);
         
-        // If there was an existing realtime listener, remove it first
         if (firebaseUnsubscribe) {
           firebaseUnsubscribe();
           firebaseUnsubscribe = null;
         }
 
+        // Check if remote document exists or needs baseline upload
+        try {
+          const docSnap = await userDocRef.get();
+          if (!docSnap.exists || !docSnap.data() || !Array.isArray(docSnap.data().words) || docSnap.data().words.length === 0) {
+            // Upload full vocabulary baseline to Firebase immediately
+            await userDocRef.set({
+              words: words,
+              groups: groups,
+              lastUpdated: new Date().toISOString()
+            }, { merge: true });
+          } else {
+            // Document exists, sync local with remote
+            const remoteData = docSnap.data();
+            if (remoteData.words && remoteData.words.length > 0) {
+              words = remoteData.words;
+              localStorage.setItem('lc_words', JSON.stringify(words));
+              renderWords();
+              updateStats();
+            }
+          }
+        } catch (firstSyncErr) {
+          console.warn('Initial sync warning:', firstSyncErr);
+        }
+
         // REALTIME LISTENER: Syncs additions, deletions and edits instantly across all devices!
-        let isInitialLoad = true;
         firebaseUnsubscribe = userDocRef.onSnapshot((docSnap) => {
           if (docSnap && docSnap.exists) {
             const data = docSnap.data();
             if (data && Array.isArray(data.words)) {
-              // Server is the single source of truth across all devices
               words = data.words;
               localStorage.setItem('lc_words', JSON.stringify(words));
               
@@ -1219,22 +1228,14 @@
               initPracticeFlashcards();
               updateCloudStatusUI('connected', 'Cloud აქტიურია');
             }
-          } else if (isInitialLoad) {
-            // First time project setup - push baseline words to cloud
-            userDocRef.set({
-              words: words,
-              groups: groups,
-              lastUpdated: new Date().toISOString()
-            }, { merge: true }).catch(() => {});
-            updateCloudStatusUI('connected', 'Cloud აქტიურია');
           }
-          isInitialLoad = false;
         }, (err) => {
           console.warn('Realtime sync fallback:', err);
           updateCloudStatusUI('connected', 'Cloud მზადაა');
         });
 
       } catch (err) {
+        console.error('Firebase Init Error:', err);
         updateCloudStatusUI('disconnected');
       }
     }
@@ -1251,10 +1252,11 @@
           words: words,
           groups: groups,
           lastUpdated: new Date().toISOString()
-        });
+        }, { merge: true });
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
       } catch (err) {
-        console.warn('Firebase save error:', err);
+        console.error('Firebase save error:', err);
+        showToast('ღრუბელში შენახვის შეცდომა', true);
         updateCloudStatusUI('connected', 'Cloud მზადაა');
       } finally {
         isCloudSyncing = false;
@@ -1927,7 +1929,54 @@ Respond strictly in valid JSON format:
       selectedForAI.delete(id);
       saveToLocalStorage();
       renderWords();
-      showToast('სიტყვა წარმატებით წაიშალა');
+      showToast('სიტყვა წაიშალა და სინქრონიზდა');
+    }
+
+    async function saveWord(e) {
+      e.preventDefault();
+      const id = document.getElementById('word-id').value;
+      const en = document.getElementById('input-word-en').value.trim();
+      const ge = document.getElementById('input-word-ge').value.trim();
+      const level = document.getElementById('select-word-level').value;
+      const group = document.getElementById('select-word-group').value;
+      const status = document.getElementById('select-word-status').value;
+      const example = document.getElementById('input-word-example').value.trim();
+      const exampleTranslation = document.getElementById('input-word-example-ge').value.trim();
+      const notes = document.getElementById('input-word-notes').value.trim();
+
+      if (!en || !ge) {
+        showToast('გთხოვთ შეავსოთ სავალდებულო ველები', true);
+        return;
+      }
+
+      if (id) {
+        const item = words.find(w => w.id === id);
+        if (item) {
+          item.en = en;
+          item.ge = ge;
+          item.level = level;
+          item.group = group;
+          item.status = status;
+          item.example = example;
+          item.exampleTranslation = exampleTranslation;
+          item.notes = notes;
+        }
+      } else {
+        words.unshift({
+          id: 'w_' + Date.now(),
+          en, ge, level, group, status,
+          favorite: false,
+          example,
+          exampleTranslation,
+          notes
+        });
+      }
+
+      saveToLocalStorage();
+      renderWords();
+      closeWordModal();
+      showToast('სიტყვა შენახულია და იგზავნება Cloud-ში!');
+      await syncToFirebase();
     }
 
     function saveWord(e) {
