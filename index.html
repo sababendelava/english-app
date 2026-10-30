@@ -1188,65 +1188,51 @@
           }
         }
 
-        // Check connection without hanging or blocking UI
         updateCloudStatusUI('syncing', 'კავშირი...');
         const userDocRef = firebaseDb.collection('linguacraft_users').doc(cfg.userId);
         
-        // Non-blocking fetch with 3.5s timeout
-        const fetchPromise = userDocRef.get({ source: 'server' });
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('timeout')), 3500)
-        );
+        // If there was an existing realtime listener, remove it first
+        if (firebaseUnsubscribe) {
+          firebaseUnsubscribe();
+          firebaseUnsubscribe = null;
+        }
 
-        try {
-          const docSnap = await Promise.race([fetchPromise, timeoutPromise]);
+        // REALTIME LISTENER: Syncs additions, deletions and edits instantly across all devices!
+        let isInitialLoad = true;
+        firebaseUnsubscribe = userDocRef.onSnapshot((docSnap) => {
           if (docSnap && docSnap.exists) {
             const data = docSnap.data();
-            if (data && Array.isArray(data.words) && data.words.length > 0) {
-              // SMART MERGE: Keep locally added words so a refresh never deletes them!
-              const remoteWords = data.words;
-              const localWords = JSON.parse(localStorage.getItem('lc_words')) || words;
-              
-              const mergedMap = new Map();
-              // First put remote words
-              remoteWords.forEach(w => { if (w && w.id) mergedMap.set(w.id, w); });
-              // Then overlay/add local words (so new words or status changes won't be lost)
-              localWords.forEach(w => { if (w && w.id) mergedMap.set(w.id, w); });
-              
-              words = Array.from(mergedMap.values());
-              if (Array.isArray(data.groups) && data.groups.length > 0) {
-                const groupMap = new Map();
-                data.groups.forEach(g => groupMap.set(g.id, g));
-                groups.forEach(g => groupMap.set(g.id, g));
-                groups = Array.from(groupMap.values());
-              }
+            if (data && Array.isArray(data.words)) {
+              // Server is the single source of truth across all devices
+              words = data.words;
               localStorage.setItem('lc_words', JSON.stringify(words));
-              localStorage.setItem('lc_groups', JSON.stringify(groups));
+              
+              if (Array.isArray(data.groups) && data.groups.length > 0) {
+                groups = data.groups;
+                localStorage.setItem('lc_groups', JSON.stringify(groups));
+                populateGroupSelects();
+                renderGroupsList();
+              }
+              
               renderWords();
               updateStats();
-              populateGroupSelects();
-              
-              // If local had more words, update cloud immediately
-              if (words.length > remoteWords.length) {
-                userDocRef.set({
-                  words: words,
-                  groups: groups,
-                  lastUpdated: new Date().toISOString()
-                }, { merge: true }).catch(() => {});
-              }
+              initPracticeFlashcards();
+              updateCloudStatusUI('connected', 'Cloud აქტიურია');
             }
-          } else {
+          } else if (isInitialLoad) {
+            // First time project setup - push baseline words to cloud
             userDocRef.set({
               words: words,
               groups: groups,
               lastUpdated: new Date().toISOString()
             }, { merge: true }).catch(() => {});
+            updateCloudStatusUI('connected', 'Cloud აქტიურია');
           }
-          updateCloudStatusUI('connected', 'Cloud აქტიურია');
-        } catch (netErr) {
-          // Graceful fallback to local cache without console errors
+          isInitialLoad = false;
+        }, (err) => {
+          console.warn('Realtime sync fallback:', err);
           updateCloudStatusUI('connected', 'Cloud მზადაა');
-        }
+        });
 
       } catch (err) {
         updateCloudStatusUI('disconnected');
@@ -1265,7 +1251,7 @@
           words: words,
           groups: groups,
           lastUpdated: new Date().toISOString()
-        }, { merge: true });
+        });
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
       } catch (err) {
         console.warn('Firebase save error:', err);
