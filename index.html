@@ -66,27 +66,27 @@
     ::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.7); }
   </style>
 </head>
-<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-200 antialiased font-sans">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen transition-colors duration-200 antialiased font-sans pb-20 md:pb-8">
 
   <!-- ==================== TOP NAVIGATION ==================== -->
   <header class="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2">
       
       <!-- Brand Logo -->
-      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('vocab')">
-        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
-          <i class="fa-solid fa-brain text-lg"></i>
+      <div class="flex items-center space-x-2.5 sm:space-x-3 cursor-pointer shrink-0" onclick="switchTab('vocab')">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+          <i class="fa-solid fa-brain text-base sm:text-lg"></i>
         </div>
         <div>
-          <h1 class="text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">
-            Lingua<span class="text-indigo-600 dark:text-indigo-400">Craft</span> <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">AI</span>
+          <h1 class="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none">
+            Lingua<span class="text-indigo-600 dark:text-indigo-400">Craft</span> <span class="text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">AI</span>
           </h1>
-          <p class="text-[10px] text-slate-500 font-medium tracking-wide">პერსონალური სასწავლო ცენტრი</p>
+          <p class="text-[9px] sm:text-[10px] text-slate-500 font-medium tracking-wide">სასწავლო ცენტრი</p>
         </div>
       </div>
 
-      <!-- Tab Navigation Buttons -->
-      <nav class="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 overflow-x-auto">
+      <!-- Desktop Tab Navigation (Hidden on Mobile) -->
+      <nav class="hidden md:flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
         <button id="nav-vocab" onclick="switchTab('vocab')" class="px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm transition whitespace-nowrap">
           <i class="fa-solid fa-book-bookmark mr-1.5"></i>სიტყვები
         </button>
@@ -105,23 +105,47 @@
       </nav>
 
       <!-- Theme & Quick Actions -->
-      <div class="flex items-center space-x-2">
+      <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
         <!-- Firebase Cloud Sync Status Button -->
         <button onclick="openCloudModal()" id="btn-cloud-status" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1.5 transition text-xs font-semibold" title="Google Firebase ღრუბლოვანი სინქრონიზაცია">
           <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-slate-400"></span>
-          <span id="cloud-status-text" class="hidden sm:inline text-[11px]">ლოკალური</span>
+          <span id="cloud-status-text" class="text-[11px] font-bold">Cloud</span>
           <i class="fa-solid fa-cloud text-xs"></i>
         </button>
 
-        <button onclick="openBackupModal()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition" title="Backup & Export (ბექაპი / ექსპორტი)">
-          <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
+        <button onclick="openBackupModal()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition" title="Backup & Export">
+          <i class="fa-solid fa-cloud-arrow-down text-xs sm:text-sm"></i>
         </button>
-        <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition" title="თემის შეცვლა">
-          <i id="theme-icon" class="fa-solid fa-moon text-sm"></i>
+        <button onclick="toggleTheme()" class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition" title="თემის შეცვლა">
+          <i id="theme-icon" class="fa-solid fa-moon text-xs sm:text-sm"></i>
         </button>
       </div>
     </div>
   </header>
+
+  <!-- ==================== MOBILE BOTTOM NAVIGATION BAR ==================== -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 flex items-center justify-around shadow-2xl">
+    <button id="mob-nav-vocab" onclick="switchTab('vocab')" class="flex flex-col items-center justify-center p-1 rounded-xl text-indigo-600 dark:text-indigo-400">
+      <i class="fa-solid fa-book-bookmark text-base"></i>
+      <span class="text-[10px] font-bold mt-0.5">სიტყვები</span>
+    </button>
+    <button id="mob-nav-daily-ai" onclick="switchTab('daily-ai')" class="flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+      <i class="fa-solid fa-robot text-base text-violet-500"></i>
+      <span class="text-[10px] font-medium mt-0.5">ყოველდღიური</span>
+    </button>
+    <button id="mob-nav-ai" onclick="switchTab('ai')" class="flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+      <i class="fa-solid fa-wand-magic-sparkles text-base text-amber-500"></i>
+      <span class="text-[10px] font-medium mt-0.5">გენერატორი</span>
+    </button>
+    <button id="mob-nav-writing" onclick="switchTab('writing')" class="flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+      <i class="fa-solid fa-pen-nib text-base text-sky-500"></i>
+      <span class="text-[10px] font-medium mt-0.5">შემმოწმებელი</span>
+    </button>
+    <button id="mob-nav-practice" onclick="switchTab('practice')" class="flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+      <i class="fa-solid fa-dumbbell text-base text-emerald-500"></i>
+      <span class="text-[10px] font-medium mt-0.5">Quiz & ტესტი</span>
+    </button>
+  </nav>
 
   <!-- ==================== MAIN CONTENT CONTAINER ==================== -->
   <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1092,11 +1116,17 @@
     /* ========================================================
        GOOGLE FIREBASE CLOUD SYNC
        ======================================================== */
+    const DEFAULT_FB_CONFIG = {
+      apiKey: "AIzaSyDHQf_fpaMjP7t-CnnNpA2yVSrW0VwtW34",
+      projectId: "my-english-vocab-2d5fe",
+      userId: "saba"
+    };
+
     function openCloudModal() {
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
-      document.getElementById('fb-api-key').value = cfg.apiKey || '';
-      document.getElementById('fb-project-id').value = cfg.projectId || '';
-      document.getElementById('fb-user-id').value = cfg.userId || 'my_english_profile';
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
+      document.getElementById('fb-api-key').value = cfg.apiKey;
+      document.getElementById('fb-project-id').value = cfg.projectId;
+      document.getElementById('fb-user-id').value = cfg.userId;
       document.getElementById('cloud-modal').classList.remove('hidden');
     }
 
@@ -1111,21 +1141,24 @@
 
       if (status === 'connected') {
         ind.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50';
+        text.className = 'text-[11px] font-bold text-emerald-600 dark:text-emerald-400';
         text.textContent = label || 'Cloud Sync';
       } else if (status === 'syncing') {
         ind.className = 'w-2 h-2 rounded-full bg-amber-500 animate-ping';
+        text.className = 'text-[11px] font-bold text-amber-500';
         text.textContent = 'ინახება...';
       } else {
         ind.className = 'w-2 h-2 rounded-full bg-slate-400';
+        text.className = 'text-[11px] font-bold text-slate-500';
         text.textContent = 'ლოკალური';
       }
     }
 
-    function initFirebase() {
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
-      if (!cfg.apiKey || !cfg.projectId || !cfg.userId) {
-        updateCloudStatusUI('disconnected');
-        return;
+    async function initFirebase() {
+      let cfg = JSON.parse(localStorage.getItem('lc_fb_config') || 'null');
+      if (!cfg || !cfg.apiKey || !cfg.projectId || !cfg.userId) {
+        cfg = DEFAULT_FB_CONFIG;
+        localStorage.setItem('lc_fb_config', JSON.stringify(cfg));
       }
 
       try {
@@ -1137,38 +1170,62 @@
           });
         }
         firebaseDb = firebase.firestore();
+
+        // Test connectivity and fetch remote data
+        updateCloudStatusUI('syncing', 'კავშირი...');
+        const userDocRef = firebaseDb.collection('linguacraft_users').doc(cfg.userId);
+        
+        const docSnap = await userDocRef.get();
+        if (docSnap.exists) {
+          const data = docSnap.data();
+          if (data && Array.isArray(data.words) && data.words.length > 0) {
+            words = data.words;
+            if (Array.isArray(data.groups)) groups = data.groups;
+            localStorage.setItem('lc_words', JSON.stringify(words));
+            localStorage.setItem('lc_groups', JSON.stringify(groups));
+            renderWords();
+            updateStats();
+            populateGroupSelects();
+          }
+        } else {
+          // Upload initial state to Firestore
+          await userDocRef.set({
+            words: words,
+            groups: groups,
+            lastUpdated: new Date().toISOString()
+          });
+        }
+
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
 
         // Realtime Listener
         if (firebaseUnsubscribe) firebaseUnsubscribe();
-        firebaseUnsubscribe = firebaseDb.collection('linguacraft_users').doc(cfg.userId)
-          .onSnapshot((doc) => {
-            if (doc.exists && !isCloudSyncing) {
-              const data = doc.data();
-              if (data && Array.isArray(data.words)) {
-                words = data.words;
-                if (Array.isArray(data.groups)) groups = data.groups;
-                localStorage.setItem('lc_words', JSON.stringify(words));
-                localStorage.setItem('lc_groups', JSON.stringify(groups));
-                renderWords();
-                updateStats();
-                populateGroupSelects();
-              }
+        firebaseUnsubscribe = userDocRef.onSnapshot((snapshot) => {
+          if (snapshot.exists && !isCloudSyncing) {
+            const data = snapshot.data();
+            if (data && Array.isArray(data.words)) {
+              words = data.words;
+              if (Array.isArray(data.groups)) groups = data.groups;
+              localStorage.setItem('lc_words', JSON.stringify(words));
+              localStorage.setItem('lc_groups', JSON.stringify(groups));
+              renderWords();
+              updateStats();
+              populateGroupSelects();
             }
-          }, (err) => {
-            console.warn('Firebase sync listener error:', err);
-            updateCloudStatusUI('disconnected');
-          });
+          }
+        }, (err) => {
+          console.warn('Realtime sync warning:', err);
+        });
 
       } catch (err) {
-        console.warn('Firebase init error:', err);
+        console.warn('Firebase connection error:', err);
         updateCloudStatusUI('disconnected');
       }
     }
 
     async function syncToFirebase() {
       if (!firebaseDb) return;
-      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
       if (!cfg.userId) return;
 
       try {
@@ -1182,7 +1239,7 @@
         updateCloudStatusUI('connected', 'სინქრონიზებულია');
       } catch (err) {
         console.warn('Firebase save error:', err);
-        updateCloudStatusUI('connected', 'ოფლაინ შენახვა');
+        updateCloudStatusUI('connected', 'Cloud მზადაა');
       } finally {
         isCloudSyncing = false;
       }
@@ -1201,7 +1258,6 @@
 
       localStorage.setItem('lc_fb_config', JSON.stringify({ apiKey, projectId, userId }));
       initFirebase();
-      syncToFirebase();
       closeCloudModal();
       showToast('Firebase სინქრონიზაცია წარმატებით ჩაირთო!');
     }
@@ -1246,14 +1302,30 @@
       ['vocab', 'daily-ai', 'ai', 'writing', 'practice'].forEach(t => {
         const page = document.getElementById(`tab-${t}`);
         if (page) page.classList.add('hidden');
+        
+        // Desktop nav button update
         const btn = document.getElementById(`nav-${t}`);
         if (btn) btn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-medium rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition whitespace-nowrap";
+        
+        // Mobile nav button update
+        const mobBtn = document.getElementById(`mob-nav-${t}`);
+        if (mobBtn) {
+          mobBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200";
+        }
       });
 
       const activePage = document.getElementById(`tab-${tabId}`);
       if (activePage) activePage.classList.remove('hidden');
+      
       const activeBtn = document.getElementById(`nav-${tabId}`);
       if (activeBtn) activeBtn.className = "px-3.5 py-1.5 text-xs sm:text-sm font-bold rounded-xl bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm transition whitespace-nowrap";
+
+      const activeMobBtn = document.getElementById(`mob-nav-${tabId}`);
+      if (activeMobBtn) {
+        activeMobBtn.className = "flex flex-col items-center justify-center p-1 rounded-xl text-indigo-600 dark:text-indigo-400 font-bold";
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
 
       if (tabId === 'practice') {
         initPracticeFlashcards();
