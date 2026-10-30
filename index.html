@@ -29,6 +29,10 @@
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+  <!-- Google Firebase App & Firestore SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -102,6 +106,13 @@
 
       <!-- Theme & Quick Actions -->
       <div class="flex items-center space-x-2">
+        <!-- Firebase Cloud Sync Status Button -->
+        <button onclick="openCloudModal()" id="btn-cloud-status" class="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center gap-1.5 transition text-xs font-semibold" title="Google Firebase ღრუბლოვანი სინქრონიზაცია">
+          <span id="cloud-indicator" class="w-2 h-2 rounded-full bg-slate-400"></span>
+          <span id="cloud-status-text" class="hidden sm:inline text-[11px]">ლოკალური</span>
+          <i class="fa-solid fa-cloud text-xs"></i>
+        </button>
+
         <button onclick="openBackupModal()" class="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center transition" title="Backup & Export (ბექაპი / ექსპორტი)">
           <i class="fa-solid fa-cloud-arrow-down text-sm"></i>
         </button>
@@ -612,40 +623,78 @@
         </button>
       </div>
 
-      <p class="text-xs text-slate-500 dark:text-slate-400 mb-5">
-        შეინახე შენი შექმნილი ლექსიკონი ფაილის სახით, რათა არასდროს დაკარგო და შეძლო სხვა კომპიუტერზე ან მობილურზე გადატანა.
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed">
+        შეგიძლია შენი ლექსიკონის სრული ბაზა შეინახო JSON ან Excel (CSV) ფაილად, ან გადმოწერილი ბექაპიდან აღადგინო.
       </p>
 
       <div class="space-y-3">
-        <!-- Export JSON -->
-        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div>
-            <h4 class="text-xs font-bold text-slate-900 dark:text-white">სრული Backup (JSON)</h4>
-            <p class="text-[11px] text-slate-400">ინახავს ყველა სიტყვას, ჯგუფს და სტატუსს</p>
-          </div>
-          <button onclick="exportToJSON()" class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow transition">
-            ჩამოტვირთვა
-          </button>
-        </div>
+        <button onclick="exportToJSON()" class="w-full py-2.5 px-4 bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-2xl text-xs sm:text-sm font-bold text-indigo-600 dark:text-indigo-400 transition flex items-center justify-between">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-file-code"></i> სრული ბექაპი (JSON)</span>
+          <i class="fa-solid fa-download text-xs"></i>
+        </button>
 
-        <!-- Export CSV / Excel -->
-        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div>
-            <h4 class="text-xs font-bold text-slate-900 dark:text-white">Excel / CSV ექსპორტი</h4>
-            <p class="text-[11px] text-slate-400">გამოდგება Excel-ში ან ცხრილებში გასახსნელად</p>
-          </div>
-          <button onclick="exportToCSV()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow transition">
-            Excel (CSV)
-          </button>
-        </div>
+        <button onclick="exportToCSV()" class="w-full py-2.5 px-4 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800 rounded-2xl text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 transition flex items-center justify-between">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-file-excel"></i> Excel / Sheets (CSV)</span>
+          <i class="fa-solid fa-download text-xs"></i>
+        </button>
 
-        <!-- Import File -->
-        <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700">
-          <h4 class="text-xs font-bold text-slate-900 dark:text-white mb-1">Backup-ის აღდგენა (JSON)</h4>
-          <p class="text-[11px] text-slate-400 mb-2">აირჩიე ადრე შენახული JSON ფაილი</p>
-          <input type="file" id="backup-file-input" accept=".json" onchange="importFromJSON(event)" class="text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-950 file:text-indigo-600 dark:file:text-indigo-400 hover:file:bg-indigo-100 cursor-pointer">
-        </div>
+        <label class="w-full py-2.5 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-between cursor-pointer">
+          <span class="flex items-center gap-2"><i class="fa-solid fa-upload"></i> ბექაპის იმპორტი (JSON)</span>
+          <input type="file" accept=".json" onchange="importFromJSON(event)" class="hidden">
+        </label>
       </div>
+
+      <div class="mt-5 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+        <button onclick="closeBackupModal()" class="px-4 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl transition">დახურვა</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Firebase Cloud Sync Modal -->
+  <div id="cloud-modal" class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+          <i class="fa-solid fa-cloud text-indigo-500"></i> Google Firebase სინქრონიზაცია
+        </h3>
+        <button onclick="closeCloudModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+        მიაბი Google Firebase Firestore, რათა შენი Pixel 8 Pro და კომპიუტერი რეალურ დროში სინქრონიზდეს. მონაცემები სამუდამოდ შეინახება Google-ის ღრუბელში.
+      </p>
+
+      <form id="firebase-config-form" onsubmit="saveFirebaseConfig(event)" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">API Key</label>
+          <input type="text" id="fb-api-key" placeholder="AIzaSy..." class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">Project ID</label>
+          <input type="text" id="fb-project-id" placeholder="linguacraft-xxxxx" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide mb-1">პირადი სინქრონიზაციის ID (User/Room ID)</label>
+          <input type="text" id="fb-user-id" placeholder="მაგ. user_giorgi" required class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
+          <p class="text-[10px] text-slate-400 mt-1">ეს ID ჩაწერე როგორც ტელეფონში, ისე კომპიუტერში, რათა ერთმანეთს დაუკავშირდნენ.</p>
+        </div>
+
+        <div class="pt-3 flex items-center justify-between gap-2 border-t border-slate-100 dark:border-slate-800">
+          <button type="button" onclick="disconnectFirebase()" class="px-3 py-2 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-xl text-xs font-bold transition">
+            გათიშვა
+          </button>
+          <div class="flex gap-2">
+            <button type="button" onclick="closeCloudModal()" class="px-3.5 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl transition">
+              დახურვა
+            </button>
+            <button type="submit" class="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl shadow transition">
+              დაკავშირება
+            </button>
+          </div>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -666,66 +715,322 @@
 
     const INITIAL_WORDS = [
       // B1 Words & Chunks
-      { id: 'b1_1', en: 'wake up early', ge: 'ადრე გაღვიძება', level: 'B1', group: 'routine', status: 'mastered', favorite: true, example: 'I try to wake up early on weekdays to exercise.', exampleTranslation: 'სამუშაო დღეებში ვცდილობ ადრე გავიღვიძო, რომ ვივარჯიშო.', notes: 'ყოველდღიური ჩვევა' },
-      { id: 'b1_2', en: 'make coffee', ge: 'ყავის მოდუღება/მომზადება', level: 'B1', group: 'routine', status: 'mastered', favorite: false, example: 'First thing I do in the morning is make coffee.', exampleTranslation: 'პირველი, რასაც დილით ვაკეთებ, ყავის მომზადებაა.', notes: '' },
-      { id: 'b1_3', en: 'run out of', ge: 'გათავება, ამოწურვა (მარაგის)', level: 'B1', group: 'routine', status: 'learning', favorite: true, example: 'We have run out of milk, so I need to go to the grocery store.', exampleTranslation: 'რძე გაგვითავდა, ამიტომ სასურსათო მაღაზიაში უნდა ჩავიდე.', notes: 'ძალიან ხშირი ფრაზული ზმნა' },
+      { id: 'b1_1', en: 'wake up early', ge: 'ადრე გაღვიძება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I try to wake up early on weekdays to exercise.', exampleTranslation: 'სამუშაო დღეებში ვცდილობ ადრე გავიღვიძო, რომ ვივარჯიშო.', notes: 'ყოველდღიური ჩვევა' },
+      { id: 'b1_2', en: 'make coffee', ge: 'ყავის მოდუღება/მომზადება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'First thing I do in the morning is make coffee.', exampleTranslation: 'პირველი, რასაც დილით ვაკეთებ, ყავის მომზადებაა.', notes: '' },
+      { id: 'b1_3', en: 'run out of', ge: 'გათავება, ამოწურვა (მარაგის)', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'We have run out of milk, so I need to go to the grocery store.', exampleTranslation: 'რძე გაგვითავდა, ამიტომ სასურსათო მაღაზიაში უნდა ჩავიდე.', notes: 'ძალიან ხშირი ფრაზული ზმნა' },
       { id: 'b1_4', en: 'head out', ge: 'გასვლა, წასვლა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I am going to head out in ten minutes.', exampleTranslation: 'ათ წუთში ვაპირებ გასვლას.', notes: 'leave-ის სასაუბრო ფორმა' },
-      { id: 'b1_5', en: 'call it a day', ge: 'სამუშაოს დამთავრება, მუშაობის შეწყვეტა', level: 'B1', group: 'work', status: 'learning', favorite: true, example: 'We have accomplished a lot today, let us call it a day.', exampleTranslation: 'დღეს ბევრი რამ მოვასწარით, მოდი დღეისთვის დავასრულოთ.', notes: 'იდიომა' },
-      { id: 'b1_6', en: 'How is it going?', ge: 'როგორ მიდის საქმეები? როგორ ხარ?', level: 'B1', group: 'social', status: 'mastered', favorite: false, example: 'Hey Giorgi, how is it going with your new project?', exampleTranslation: 'ჰეი გიორგი, როგორ მიდის საქმე შენს ახალ პროექტზე?', notes: 'მისალმება' },
-      { id: 'b1_7', en: 'By the way', ge: 'სხვათა შორის', level: 'B1', group: 'social', status: 'mastered', favorite: false, example: 'By the way, did you receive the confirmation email?', exampleTranslation: 'სხვათა შორის, მიიღე დასტურის მეილი?', notes: 'თემის გადასატანად' },
-      { id: 'b1_8', en: 'To be honest', ge: 'გულწრფელად რომ ვთქვა', level: 'B1', group: 'opinions', status: 'mastered', favorite: true, example: 'To be honest, I am not really satisfied with the result.', exampleTranslation: 'გულწრფელად რომ ვთქვა, შედეგით დიდად კმაყოფილი არ ვარ.', notes: '' },
-      { id: 'b1_9', en: 'Sounds good to me', ge: 'ჩემთვის მისაღებია, კარგი აზრია', level: 'B1', group: 'social', status: 'mastered', favorite: false, example: 'Meeting at 6 PM? Sounds good to me.', exampleTranslation: 'შეხვედრა საღამოს 6 საათზე? ჩემთვის მისაღებია.', notes: 'შეთანხმება' },
-      { id: 'b1_10', en: 'keep in touch', ge: 'კავშირზე დარჩენა', level: 'B1', group: 'social', status: 'mastered', favorite: false, example: 'It was great seeing you, let us keep in touch!', exampleTranslation: 'მიხარია შენი ნახვა, მოდი კავშირზე ვიყოთ!', notes: '' },
+      { id: 'b1_5', en: 'call it a day', ge: 'სამუშაოს დამთავრება, მუშაობის შეწყვეტა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'We have accomplished a lot today, let us call it a day.', exampleTranslation: 'დღეს ბევრი რამ მოვასწარით, მოდი დღეისთვის დავასრულოთ.', notes: 'იდიომა' },
+      { id: 'b1_6', en: 'How is it going?', ge: 'როგორ მიდის საქმეები? როგორ ხარ?', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Hey Giorgi, how is it going with your new project?', exampleTranslation: 'ჰეი გიორგი, როგორ მიდის საქმე შენს ახალ პროექტზე?', notes: 'მისალმება' },
+      { id: 'b1_7', en: 'By the way', ge: 'სხვათა შორის', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'By the way, did you receive the confirmation email?', exampleTranslation: 'სხვათა შორის, მიიღე დასტურის მეილი?', notes: 'თემის გადასატანად' },
+      { id: 'b1_8', en: 'To be honest', ge: 'გულწრფელად რომ ვთქვა', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'To be honest, I am not really satisfied with the result.', exampleTranslation: 'გულწრფელად რომ ვთქვა, შედეგით დიდად კმაყოფილი არ ვარ.', notes: '' },
+      { id: 'b1_9', en: 'Sounds good to me', ge: 'ჩემთვის მისაღებია, კარგი აზრია', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Meeting at 6 PM? Sounds good to me.', exampleTranslation: 'შეხვედრა საღამოს 6 საათზე? ჩემთვის მისაღებია.', notes: 'შეთანხმება' },
+      { id: 'b1_10', en: 'keep in touch', ge: 'კავშირზე დარჩენა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'It was great seeing you, let us keep in touch!', exampleTranslation: 'მიხარია შენი ნახვა, მოდი კავშირზე ვიყოთ!', notes: '' },
       { id: 'b1_11', en: 'achieve', ge: 'მიღწევა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'You will achieve your goals if you practice daily.', exampleTranslation: 'შენს მიზნებს მიაღწევ, თუ ყოველდღიურად ივარჯიშებ.', notes: '' },
       { id: 'b1_12', en: 'afford', ge: 'შეძლების ქონა (ფინანსურად)', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'I cannot afford to buy a new laptop right now.', exampleTranslation: 'ახლა ახალი ლეპტოპის ყიდვის ფუფუნება არ მაქვს.', notes: '' },
       { id: 'b1_13', en: 'clarify', ge: 'განმარტება, გარკვევა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Could you please clarify what you mean by that?', exampleTranslation: 'შეგიძლია განმარტო, რას გულისხმობ ამაში?', notes: '' },
       { id: 'b1_14', en: 'encourage', ge: 'წახალისება, გამხნევება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'My friends encourage me to speak English more often.', exampleTranslation: 'მეგობრები მახალისებენ, რომ უფრო ხშირად ვისაუბრო ინგლისურად.', notes: '' },
       { id: 'b1_15', en: 'hesitate', ge: 'ყოყმანი, შეყოვნება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Do not hesitate to ask if you have any questions.', exampleTranslation: 'ნუ მოგერიდება კითხვა, თუ რაიმე გაინტერესებს.', notes: '' },
-      { id: 'b1_16', en: 'reliable', ge: 'სანდო, საიმედო', level: 'B1', group: 'work', status: 'mastered', favorite: false, example: 'He is a very reliable developer who always delivers on time.', exampleTranslation: 'ის ძალიან სანდო დეველოპერია, რომელიც ყოველთვის დროულად ასრულებს საქმეს.', notes: '' },
+      { id: 'b1_16', en: 'reliable', ge: 'სანდო, საიმედო', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'He is a very reliable developer who always delivers on time.', exampleTranslation: 'ის ძალიან სანდო დეველოპერია, რომელიც ყოველთვის დროულად ასრულებს საქმეს.', notes: '' },
       { id: 'b1_17', en: 'tend to', ge: 'მიდრეკილების ქონა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I tend to drink more coffee when I am stressed.', exampleTranslation: 'მიდრეკილება მაქვს მეტი ყავა დავლიო, როდესაც სტრესში ვარ.', notes: '' },
-      { id: 'b1_18', en: 'figure out', ge: 'გარკვევა, მიხვედრა', level: 'B1', group: 'work', status: 'mastered', favorite: true, example: 'I will figure out how this configuration works.', exampleTranslation: 'გავარკვევ, როგორ მუშაობს ეს კონფიგურაცია.', notes: '' },
-      { id: 'b1_19', en: 'make sure', ge: 'დარწმუნება, გადამოწმება', level: 'B1', group: 'work', status: 'mastered', favorite: false, example: 'Make sure you save your files before closing.', exampleTranslation: 'დარწმუნდი, რომ დახურვამდე ფაილები შეინახე.', notes: '' },
+      { id: 'b1_18', en: 'figure out', ge: 'გარკვევა, მიხვედრა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'I will figure out how this configuration works.', exampleTranslation: 'გავარკვევ, როგორ მუშაობს ეს კონფიგურაცია.', notes: '' },
+      { id: 'b1_19', en: 'make sure', ge: 'დარწმუნება, გადამოწმება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Make sure you save your files before closing.', exampleTranslation: 'დარწმუნდი, რომ დახურვამდე ფაილები შეინახე.', notes: '' },
       { id: 'b1_20', en: 'catch up', ge: 'დაწევა; ახალი ამბების გაგება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Let us meet this weekend and catch up.', exampleTranslation: 'მოდი ამ უქმეებზე შევხვდეთ და ახალი ამბები მოვყვეთ.', notes: '' },
+      { id: 'b1_21', en: 'tidy up', ge: 'მიწესრიგება, დალაგება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I usually tidy up my workspace before I start working.', exampleTranslation: 'მუშაობის დაწყებამდე ჩვეულებრივ სამუშაო მაგიდას ვალაგებ ხოლმე.', notes: '' },
+      { id: 'b1_22', en: 'grab a bite', ge: 'წახემსება, სწრაფად ჭამა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'Do you want to grab a bite to eat before the movie?', exampleTranslation: 'ფილმამდე ხომ არ გინდა რამე სწრაფად წავუხემსოთ?', notes: '' },
+      { id: 'b1_23', en: 'sleep in', ge: 'დილას დიდხანს ძილი (გამოძინება)', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'On Sundays I love to sleep in until ten.', exampleTranslation: 'კვირაობით მიყვარს ათ საათამდე დიდხანს ძილი.', notes: '' },
+      { id: 'b1_24', en: 'look forward to', ge: 'მოუთმენლად ლოდინი', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'I really look forward to meeting your team.', exampleTranslation: 'ნამდვილად მოუთმენლად ველი შენი გუნდის გაცნობას.', notes: '' },
+      { id: 'b1_25', en: 'give up', ge: 'დანებება, თავის დანებება', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Never give up on learning new technologies.', exampleTranslation: 'არასდროს დანებდე ახალი ტექნოლოგიების სწავლისას.', notes: '' },
+      { id: 'b1_26', en: 'carry on', ge: 'გაგრძელება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'You should carry on practicing every single day.', exampleTranslation: 'ყოველდღიურად ვარჯიში უნდა გააგრძელო.', notes: '' },
+      { id: 'b1_27', en: 'find out', ge: 'გაგება, აღმოჩენა, შეტყობა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'We will find out the test results tomorrow morning.', exampleTranslation: 'ტესტის შედეგებს ხვალ დილით გავიგებთ.', notes: '' },
+      { id: 'b1_28', en: 'put off', ge: 'გადადება (დროში)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Do not put off till tomorrow what you can do today.', exampleTranslation: 'ხვალისთვის ნუ გადადებ იმას, რისი გაკეთებაც დღეს შეგიძლია.', notes: '' },
+      { id: 'b1_29', en: 'set up', ge: 'მორგება, გამართვა, დაყენება', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'It took half an hour to set up the development environment.', exampleTranslation: 'ნახევარი საათი დასჭირდა დეველოპმენტის გარემოს გამართვას.', notes: '' },
+      { id: 'b1_30', en: 'take care of', ge: 'მიხედვა, ზრუნვა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'I will take care of this client right away.', exampleTranslation: 'ამ კლიენტს დაუყოვნებლივ მივხედავ.', notes: '' },
+      { id: 'b1_31', en: 'manage to', ge: 'რაიმეს მოხერხება, შეძლება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'We managed to finish the report before 5 PM.', exampleTranslation: 'მოვახერხეთ რეპორტის 5 საათამდე დამთავრება.', notes: '' },
+      { id: 'b1_32', en: 'deal with', ge: 'გამკლავება, საქმის დაჭერა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'He knows how to deal with difficult clients.', exampleTranslation: 'მან იცის, როგორ გაუმკლავდეს რთულ კლიენტებს.', notes: '' },
+      { id: 'b1_33', en: 'depend on', ge: 'დამოკიდებული ყოფნა', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Our success depends on team collaboration.', exampleTranslation: 'ჩვენი წარმატება გუნდურ თანამშრომლობაზეა დამოკიდებული.', notes: '' },
+      { id: 'b1_34', en: 'get along with', ge: 'ვინმესთან კარგი ურთიერთობის ქონა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'I get along well with all my colleagues.', exampleTranslation: 'ყველა ჩემს კოლეგასთან კარგად ვეწყობი.', notes: '' },
+      { id: 'b1_35', en: 'give advice', ge: 'რჩევის მიცემა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Can you give me some advice on this issue?', exampleTranslation: 'შეგიძლია რაიმე რჩევა მომცე ამ საკითხზე?', notes: '' },
+      { id: 'b1_36', en: 'take a break', ge: 'შესვენების აღება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'You look tired, you should take a break.', exampleTranslation: 'დაღლილი ჩანხარ, შესვენება უნდა აიღო.', notes: '' },
+      { id: 'b1_37', en: 'keep in mind', ge: 'გათვალისწინება, მხედველობაში ქონა', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Keep in mind that the office closes early on Fridays.', exampleTranslation: 'გაითვალისწინე, რომ პარასკევობით ოფისი ადრე იკეტება.', notes: '' },
+      { id: 'b1_38', en: 'look for', ge: 'ძებნა', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'I am looking for my car keys.', exampleTranslation: 'მანქანის გასაღებს ვეძებ.', notes: '' },
+      { id: 'b1_39', en: 'pay attention to', ge: 'ყურადღების მიქცევა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Please pay close attention to the instructions.', exampleTranslation: 'გთხოვთ, ყურადღებით გაეცნოთ ინსტრუქციებს.', notes: '' },
+      { id: 'b1_40', en: 'run into', ge: 'შემთხვევით შეხვედრა (ვინმესთან)', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'I ran into an old classmate at the supermarket.', exampleTranslation: 'სუპერმარკეტში ძველ თანაკლასელს გადავაწყდი.', notes: '' },
+      { id: 'b1_41', en: 'take advantage of', ge: 'შესაძლებლობის გამოყენება (სასიკეთოდ)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'You should take advantage of this training opportunity.', exampleTranslation: 'უნდა გამოიყენო ეს სასწავლო შესაძლებლობა.', notes: '' },
+      { id: 'b1_42', en: 'as soon as possible', ge: 'რაც შეიძლება მალე (ASAP)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Please send me the documents as soon as possible.', exampleTranslation: 'გთხოვთ გამომიგზავნოთ დოკუმენტები რაც შეიძლება მალე.', notes: '' },
+      { id: 'b1_43', en: 'at least', ge: 'მინიმუმ, სულ მცირე', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'You need to practice at least twenty minutes a day.', exampleTranslation: 'დღეში სულ მცირე ოცი წუთი მაინც უნდა ივარჯიშო.', notes: '' },
+      { id: 'b1_44', en: 'by accident', ge: 'შემთხვევით', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I deleted the wrong folder by accident.', exampleTranslation: 'შემთხვევით არასწორი საქაღალდე წავშალე.', notes: '' },
+      { id: 'b1_45', en: 'change your mind', ge: 'აზრის შეცვლა', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'If you change your mind, let me know.', exampleTranslation: 'თუ აზრს შეიცვლი, გამაგებინე.', notes: '' },
+      { id: 'b1_46', en: 'come up with', ge: 'იდეის მოფიქრება, წამოყენება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'He came up with a great solution to our problem.', exampleTranslation: 'მან ჩვენი პრობლემის შესანიშნავი გამოსავალი მოიფიქრა.', notes: '' },
+      { id: 'b1_47', en: 'get rid of', ge: 'თავიდან მოშორება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I need to get rid of all these old boxes.', exampleTranslation: 'ყველა ამ ძველი ყუთის თავიდან მოშორება მჭირდება.', notes: '' },
+      { id: 'b1_48', en: 'have in common', ge: 'საერთოს ქონა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'We have a lot of hobbies in common.', exampleTranslation: 'ჩვენ ბევრი საერთო ჰობი გვაქვს.', notes: '' },
+      { id: 'b1_49', en: 'in terms of', ge: 'რაიმეს მხრივ, თვალსაზრისით', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'In terms of speed, this phone is outstanding.', exampleTranslation: 'სისწრაფის თვალსაზრისით ეს ტელეფონი გამორჩეულია.', notes: '' },
+      { id: 'b1_50', en: 'instead of', ge: 'ნაცვლად', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Let us walk instead of taking a taxi.', exampleTranslation: 'მოდი ტაქსის ნაცვლად ფეხით წავიდეთ.', notes: '' },
+      { id: 'b1_51', en: 'look into', ge: 'გამოკვლევა, დეტალურად შესწავლა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'The support team will look into this issue.', exampleTranslation: 'მხარდაჭერის გუნდი შეისწავლის ამ საკითხს.', notes: '' },
+      { id: 'b1_52', en: 'make a decision', ge: 'გადაწყვეტილების მიღება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'We have to make a decision by Friday.', exampleTranslation: 'პარასკევამდე უნდა მივიღოთ გადაწყვეტილება.', notes: '' },
+      { id: 'b1_53', en: 'make a mistake', ge: 'შეცდომის დაშვება', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Everyone makes a mistake from time to time.', exampleTranslation: 'დროდადრო ყველა უშვებს შეცდომას.', notes: '' },
+      { id: 'b1_54', en: 'no matter', ge: 'არ აქვს მნიშვნელობა', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'No matter what happens, keep calm.', exampleTranslation: 'რაც არ უნდა მოხდეს, სიმშვიდე შეინარჩუნე.', notes: '' },
+      { id: 'b1_55', en: 'on purpose', ge: 'განზრახ, შეგნებულად', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'I did not break that glass on purpose.', exampleTranslation: 'ეს ჭიქა განზრახ არ გამიტეხია.', notes: '' },
+      { id: 'b1_56', en: 'point of view', ge: 'თვალსაზრისი, შეხედულება', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'From my point of view, this plan is realistic.', exampleTranslation: 'ჩემი თვალსაზრისით ეს გეგმა რეალისტურია.', notes: '' },
+      { id: 'b1_57', en: 'rely on', ge: 'დაყრდნობა, იმედის ქონა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'You can always rely on our technical support.', exampleTranslation: 'შენ ყოველთვის შეგიძლია დაეყრდნო ჩვენს ტექნიკურ მხარდაჭერას.', notes: '' },
+      { id: 'b1_58', en: 'remind of', ge: 'შეხსენება (ვინმესი ან რამესი)', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'This melody reminds me of my childhood.', exampleTranslation: 'ეს მელოდია ბავშვობას მახსენებს.', notes: '' },
+      { id: 'b1_59', en: 'take part in', ge: 'მონაწილეობის მიღება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Many students took part in the workshop.', exampleTranslation: 'ბევრმა სტუდენტმა მიიღო მონაწილეობა ვორკშოპში.', notes: '' },
+      { id: 'b1_60', en: 'used to', ge: 'წინათ ჩვევად ქონა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I used to drink tea, but now I drink coffee.', exampleTranslation: 'წინათ ჩაის ვსვამდი ხოლმე, ახლა კი ყავას ვსვამ.', notes: '' },
+      { id: 'b1_61', en: 'get used to', ge: 'მიჩვევა, შეჩვევა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'You will quickly get used to the new keyboard layout.', exampleTranslation: 'სწრაფად შეეჩვევი კლავიატურის ახალ განლაგებას.', notes: '' },
+      { id: 'b1_62', en: 'as long as', ge: 'სანამ, იმ პირობით რომ', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'You can stay here as long as you keep quiet.', exampleTranslation: 'აქ შეგიძლია დარჩე მანამ, სანამ სიჩუმეს შეინარჩუნებ.', notes: '' },
+      { id: 'b1_63', en: 'turn down', ge: 'უარყოფა; ხმის დაწევა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'She turned down the first job offer.', exampleTranslation: 'მან პირველი სამუშაო შემოთავაზება უარყო.', notes: '' },
+      { id: 'b1_64', en: 'turn on / off', ge: 'ჩართვა / გამორთვა', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'Please turn off the lights when leaving.', exampleTranslation: 'გასვლისას გთხოვთ შუქი გამორთოთ.', notes: '' },
+      { id: 'b1_65', en: 'break down', ge: 'გაფუჭება (აპარატის); დაშლა ნაწილებად', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'My old car broke down on the highway.', exampleTranslation: 'ჩემი ძველი მანქანა ტრასაზე გაფუჭდა.', notes: '' },
+      { id: 'b1_66', en: 'calm down', ge: 'დამშვიდება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Take a deep breath and calm down.', exampleTranslation: 'ღრმად ჩაისუნთქე და დამშვიდდი.', notes: '' },
+      { id: 'b1_67', en: 'check in', ge: 'რეგისტრაცია (სასტუმროში, აეროპორტში)', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'We need to check in at least two hours early.', exampleTranslation: 'მინიმუმ ორი საათით ადრე უნდა გავიაროთ რეგისტრაცია.', notes: '' },
+      { id: 'b1_68', en: 'check out', ge: 'ნომრის დატოვება; დათვალიერება', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'We have to check out of the hotel by 11 AM.', exampleTranslation: 'სასტუმროდან 11 საათამდე უნდა გავიდეთ.', notes: '' },
+      { id: 'b1_69', en: 'come back', ge: 'დაბრუნება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'When do you plan to come back home?', exampleTranslation: 'როდის გეგმავ სახლში დაბრუნებას?', notes: '' },
+      { id: 'b1_70', en: 'drop by', ge: 'შეწერა, მოკლედ შევლა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Feel free to drop by my office anytime.', exampleTranslation: 'როცა გინდა მოკლედ შემოიარე ჩემს ოფისში.', notes: '' },
+      { id: 'b1_71', en: 'fall behind', ge: 'ჩამორჩენა (გრაფიკს, ტემპს)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Do not fall behind on your weekly assignments.', exampleTranslation: 'შენს ყოველკვირეულ დავალებებს ნუ ჩამორჩები.', notes: '' },
+      { id: 'b1_72', en: 'fill in', ge: 'შევსება (ფორმის, ველის)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Please fill in this application form.', exampleTranslation: 'გთხოვთ შეავსოთ ეს განაცხადის ფორმა.', notes: '' },
+      { id: 'b1_73', en: 'get back to', ge: 'პასუხით დაბრუნება', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'I will get back to you with the details soon.', exampleTranslation: 'დეტალებით მალე დაგიბრუნდებით.', notes: '' },
+      { id: 'b1_74', en: 'go ahead', ge: 'დაწყება, ნებართვის მიცემა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Go ahead and ask your question.', exampleTranslation: 'მიდი, დაიწყე და დასვი შენი კითხვა.', notes: '' },
+      { id: 'b1_75', en: 'hang out', ge: 'დროის ერთად გატარება', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'We usually hang out at the park on Saturdays.', exampleTranslation: 'შაბათობით ჩვეულებრივ პარკში ვატარებთ ხოლმე დროს.', notes: '' },
+      { id: 'b1_76', en: 'hold on', ge: 'მოცდა, დალოდება (ტელეფონზე)', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Hold on a second, I will check that for you.', exampleTranslation: 'ერთი წამით დაიცადეთ, ახლავე გადავამოწმებ.', notes: '' },
+      { id: 'b1_77', en: 'keep on', ge: 'რაიმეს განუწყვეტლივ კეთება', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'Keep on practicing until you feel confident.', exampleTranslation: 'განაგრძე ვარჯიში, სანამ თავს თავდაჯერებულად არ იგრძნობ.', notes: '' },
+      { id: 'b1_78', en: 'look after', ge: 'მოვლა, მზრუნველობა', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'Can you look after my cat while I am away?', exampleTranslation: 'შეგიძლია ჩემს კატას მიხედო, სანამ წასული ვიქნები?', notes: '' },
+      { id: 'b1_79', en: 'look up', ge: 'ინფორმაციის მოძიება (ლექსიკონში/ინტერნეტში)', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'Look up the definition of this new phrase.', exampleTranslation: 'მოიძიე ამ ახალი ფრაზის განმარტება.', notes: '' },
+      { id: 'b1_80', en: 'pick up', ge: 'აყვანა, წამოღება; ენის ადვილად ათვისება', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'I will pick up the package on my way home.', exampleTranslation: 'ამანათს სახლის გზაზე გამოვივლი და წამოვიღებ.', notes: '' },
+      { id: 'b1_81', en: 'run out', ge: 'ამოწურვა', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'Our time is running out quickly.', exampleTranslation: 'ჩვენი დრო ძალიან სწრაფად იწურება.', notes: '' },
+      { id: 'b1_82', en: 'show up', ge: 'გამოჩენა, მოსვლა', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'He did not show up for the morning meeting.', exampleTranslation: 'ის დილის შეხვედრაზე არ გამოჩენილა.', notes: '' },
+      { id: 'b1_83', en: 'take off', ge: 'აფრენა; ტანსაცმლის გახდა', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'The flight will take off in twenty minutes.', exampleTranslation: 'რეისი ოც წუთში აფრინდება.', notes: '' },
+      { id: 'b1_84', en: 'try on', ge: 'ტანსაცმლის მორგება/მოსინჯვა', level: 'B1', group: 'errands', status: 'learning', favorite: false, example: 'Can I try on this jacket in a medium size?', exampleTranslation: 'შემიძლია ეს ქურთუკი M ზომაში მოვირგო?', notes: '' },
+      { id: 'b1_85', en: 'wake up', ge: 'გაღვიძება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I usually wake up at 7 AM.', exampleTranslation: 'ჩვეულებრივ დილის 7 საათზე ვიღვიძებ.', notes: '' },
+      { id: 'b1_86', en: 'work out', ge: 'ვარჯიში; საქმის მოგვარება', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'Everything will work out fine in the end.', exampleTranslation: 'საბოლოოდ ყველაფერი კარგად მოგვარდება.', notes: '' },
+      { id: 'b1_87', en: 'write down', ge: 'ჩაწერა (ქაღალდზე ან ფაილში)', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Write down these instructions so you do not forget.', exampleTranslation: 'ჩაიწერე ეს ინსტრუქციები, რომ არ დაგავიწყდეს.', notes: '' },
+      { id: 'b1_88', en: 'at the moment', ge: 'ამ მომენტში', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'He is busy on another call at the moment.', exampleTranslation: 'ამ მომენტში ის სხვა ზარზეა დაკავებული.', notes: '' },
+      { id: 'b1_89', en: 'by mistake', ge: 'შეცდომით', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'I sent the file to the wrong person by mistake.', exampleTranslation: 'ფაილი შეცდომით სხვა ადამიანს გავუგზავნე.', notes: '' },
+      { id: 'b1_90', en: 'for example', ge: 'მაგალითად', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'You can study many topics, for example history or physics.', exampleTranslation: 'შეგიძლია ბევრი თემა ისწავლო, მაგალითად ისტორია ან ფიზიკა.', notes: '' },
+      { id: 'b1_91', en: 'in a hurry', ge: 'ჩქარობაში, აჩქარებული', level: 'B1', group: 'routine', status: 'learning', favorite: false, example: 'I cannot talk right now because I am in a hurry.', exampleTranslation: 'ახლა ვერ დაგელაპარაკები, რადგან მეჩქარება.', notes: '' },
+      { id: 'b1_92', en: 'in fact', ge: 'სინამდვილეში, ფაქტობრივად', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'In fact, I already finished the task yesterday.', exampleTranslation: 'სინამდვილეში, ეს დავალება გუშინვე დავასრულე.', notes: '' },
+      { id: 'b1_93', en: 'in the meantime', ge: 'ამასობაში, ამ დროს', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'The report is loading; in the meantime, grab some water.', exampleTranslation: 'რეპორტი იტვირთება; ამასობაში წყალი დალიე.', notes: '' },
+      { id: 'b1_94', en: 'on the other hand', ge: 'მეორე მხრივ', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'It is expensive, but on the other hand, it is durable.', exampleTranslation: 'ძვირია, მაგრამ მეორე მხრივ გამძლეა.', notes: '' },
+      { id: 'b1_95', en: 'out of date', ge: 'ვადაგასული, მოძველებული', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'This software version is completely out of date.', exampleTranslation: 'ეს პროგრამული ვერსია სრულიად მოძველებულია.', notes: '' },
+      { id: 'b1_96', en: 'up to date', ge: 'თანამედროვე, განახლებული', level: 'B1', group: 'tech', status: 'learning', favorite: false, example: 'Always keep your operating system up to date.', exampleTranslation: 'ოპერაციული სისტემა მუდამ განახლებული გქონდეს.', notes: '' },
+      { id: 'b1_97', en: 'so far', ge: 'ჯერჯერობით, ამ დრომდე', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Everything has been going smoothly so far.', exampleTranslation: 'ჯერჯერობით ყველაფერი შეუფერხებლად მიდის.', notes: '' },
+      { id: 'b1_98', en: 'take a look', ge: 'შეხედვა, გადახედვა', level: 'B1', group: 'work', status: 'learning', favorite: false, example: 'Can you take a look at my code snippet?', exampleTranslation: 'შეგიძლია ჩემს კოდს ერთი თვალი გადაავლო?', notes: '' },
+      { id: 'b1_99', en: 'worth it', ge: 'ღირებული, ამად რომ ღირს', level: 'B1', group: 'opinions', status: 'learning', favorite: false, example: 'The course was tough, but it was definitely worth it.', exampleTranslation: 'კურსი რთული იყო, მაგრამ ნამდვილად ღირდა.', notes: '' },
+      { id: 'b1_100', en: 'you are welcome', ge: 'არაფრის (მადლობის საპასუხოდ)', level: 'B1', group: 'social', status: 'learning', favorite: false, example: 'Thank you for your help! - You are welcome.', exampleTranslation: 'მადლობა დახმარებისთვის! - არაფრის.', notes: '' },
 
       // B2 Words & Chunks
-      { id: 'b2_1', en: 'troubleshoot', ge: 'პრობლემის დიაგნოსტიკა და მოგვარება', level: 'B2', group: 'tech', status: 'mastered', favorite: true, example: 'I need to troubleshoot why the API is throwing errors.', exampleTranslation: 'უნდა გავარკვიო და მოვაგვარო, რატომ ისვრის API შეცდომებს.', notes: 'IT-ში აუცილებელი ტერმინი' },
+      { id: 'b2_1', en: 'troubleshoot', ge: 'პრობლემის დიაგნოსტიკა და მოგვარება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'I need to troubleshoot why the API is throwing errors.', exampleTranslation: 'უნდა გავარკვიო და მოვაგვარო, რატომ ისვრის API შეცდომებს.', notes: 'IT-ში აუცილებელი ტერმინი' },
       { id: 'b2_2', en: 'allocate', ge: 'განაწილება, გამოყოფა (რესურსების)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The manager allocated more budget to cybersecurity.', exampleTranslation: 'მენეჯერმა მეტი ბიუჯეტი გამოყო კიბერუსაფრთხოებისთვის.', notes: '' },
-      { id: 'b2_3', en: 'comprehensive', ge: 'ყოვლისმომცველი, ამომწურავი', level: 'B2', group: 'work', status: 'learning', favorite: true, example: 'We provided a comprehensive guide for all new developers.', exampleTranslation: 'ჩვენ მოვამზადეთ ყოვლისმომცველი გზამკვლევი ყველა ახალი დეველოპერისთვის.', notes: '' },
-      { id: 'b2_4', en: 'feasible', ge: 'შესაძლებელი, განხორციელებადი', level: 'B2', group: 'work', status: 'learning', favorite: true, example: 'Is it technically feasible to deploy this update today?', exampleTranslation: 'ტექნიკურად რამდენად განხორციელებადია ამ განახლების დღეს გაშვება?', notes: '' },
-      { id: 'b2_5', en: 'implement', ge: 'დანერგვა, განხორციელება', level: 'B2', group: 'tech', status: 'mastered', favorite: false, example: 'We are going to implement a new authentication flow.', exampleTranslation: 'ჩვენ ვაპირებთ ახალი აუთენტიფიკაციის მექანიზმის დანერგვას.', notes: '' },
-      { id: 'b2_6', en: 'mitigate', ge: 'შემსუბუქება, რისკის შემცირება', level: 'B2', group: 'work', status: 'learning', favorite: true, example: 'We must take prompt action to mitigate potential security risks.', exampleTranslation: 'სასწრაფო ზომები უნდა მივიღოთ უსაფრთხოების შესაძლო რისკების შესამცირებლად.', notes: '' },
+      { id: 'b2_3', en: 'comprehensive', ge: 'ყოვლისმომცველი, ამომწურავი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We provided a comprehensive guide for all new developers.', exampleTranslation: 'ჩვენ მოვამზადეთ ყოვლისმომცველი გზამკვლევი ყველა ახალი დეველოპერისთვის.', notes: '' },
+      { id: 'b2_4', en: 'feasible', ge: 'შესაძლებელი, განხორციელებადი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Is it technically feasible to deploy this update today?', exampleTranslation: 'ტექნიკურად რამდენად განხორციელებადია ამ განახლების დღეს გაშვება?', notes: '' },
+      { id: 'b2_5', en: 'implement', ge: 'დანერგვა, განხორციელება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'We are going to implement a new authentication flow.', exampleTranslation: 'ჩვენ ვაპირებთ ახალი აუთენტიფიკაციის მექანიზმის დანერგვას.', notes: '' },
+      { id: 'b2_6', en: 'mitigate', ge: 'შემსუბუქება, რისკის შემცირება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We must take prompt action to mitigate potential security risks.', exampleTranslation: 'სასწრაფო ზომები უნდა მივიღოთ უსაფრთხოების შესაძლო რისკების შესამცირებლად.', notes: '' },
       { id: 'b2_7', en: 'overlook', ge: 'გამორჩენა, უყურადღებოდ დატოვება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Never overlook tiny details during code review.', exampleTranslation: 'კოდის განხილვისას არასდროს გამოგრჩეს წვრილმანი დეტალები.', notes: '' },
       { id: 'b2_8', en: 'prone to', ge: 'მიდრეკილი რაიმე უარყოფითისკენ', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'Manual deployments are notoriously prone to human error.', exampleTranslation: 'ხელით განლაგება ცნობილია იმით, რომ მიდრეკილია ადამიანური შეცდომებისკენ.', notes: '' },
       { id: 'b2_9', en: 'reluctant', ge: 'არამსურველი, უკმაყოფილოდ დათანხმებული', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'They were reluctant to change their existing architecture.', exampleTranslation: 'მათ დიდად არ სურდათ არსებული არქიტექტურის შეცვლა.', notes: '' },
       { id: 'b2_10', en: 'unveil', ge: 'წარდგენა, გასაჯაროება, ფარდის ახდა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The company unveiled its newest AI product yesterday.', exampleTranslation: 'კომპანიამ გუშინ თავისი უახლესი AI პროდუქტი წარადგინა.', notes: '' },
-      { id: 'b2_11', en: 'get straight to the point', ge: 'პირდაპირ არსზე გადასვლა', level: 'B2', group: 'work', status: 'mastered', favorite: true, example: 'Let us get straight to the point without wasting any more time.', exampleTranslation: 'მოდი პირდაპირ საქმის არსზე გადავიდეთ ზედმეტი დროის დაკარგვის გარეშე.', notes: '' },
-      { id: 'b2_12', en: 'touch base', ge: 'მოკლედ შეხმიანება/გადამოწმება', level: 'B2', group: 'work', status: 'learning', favorite: true, example: 'I just wanted to touch base regarding tomorrow’s release.', exampleTranslation: 'უბრალოდ მინდოდა მოკლედ შეგხმიანებოდით ხვალინდელ რელიზთან დაკავშირებით.', notes: 'საქმიანი კოლექტივი' },
-      { id: 'b2_13', en: 'on the same page', ge: 'ერთ აზრზე ყოფნა, თანხვედრა', level: 'B2', group: 'work', status: 'mastered', favorite: false, example: 'Let us make sure we are both on the same page before beginning.', exampleTranslation: 'მოდი დავრწმუნდეთ, რომ დაწყებამდე ორივე ერთ აზრზე ვართ.', notes: '' },
+      { id: 'b2_11', en: 'get straight to the point', ge: 'პირდაპირ არსზე გადასვლა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Let us get straight to the point without wasting any more time.', exampleTranslation: 'მოდი პირდაპირ საქმის არსზე გადავიდეთ ზედმეტი დროის დაკარგვის გარეშე.', notes: '' },
+      { id: 'b2_12', en: 'touch base', ge: 'მოკლედ შეხმიანება/გადამოწმება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'I just wanted to touch base regarding tomorrow’s release.', exampleTranslation: 'უბრალოდ მინდოდა მოკლედ შეგხმიანებოდით ხვალინდელ რელიზთან დაკავშირებით.', notes: 'საქმიანი კოლექტივი' },
+      { id: 'b2_13', en: 'on the same page', ge: 'ერთ აზრზე ყოფნა, თანხვედრა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Let us make sure we are both on the same page before beginning.', exampleTranslation: 'მოდი დავრწმუნდეთ, რომ დაწყებამდე ორივე ერთ აზრზე ვართ.', notes: '' },
       { id: 'b2_14', en: 'wrap things up', ge: 'საქმის შეჯამება და დასრულება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Give me ten minutes to wrap things up here.', exampleTranslation: 'ათი წუთი მომეცი, რომ აქ საქმე დავამთავრო.', notes: '' },
-      { id: 'b2_15', en: 'fair enough', ge: 'გასაგებია, ლოგიკურია (ვეთანხმები)', level: 'B2', group: 'opinions', status: 'mastered', favorite: false, example: 'If you are too tired to drive, fair enough, I will take the wheel.', exampleTranslation: 'თუ საჭესთან დასაჯდომად ძალიან დაიღალე, გასაგებია, მე გავატარებ.', notes: '' },
+      { id: 'b2_15', en: 'fair enough', ge: 'გასაგებია, ლოგიკურია (ვეთანხმები)', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'If you are too tired to drive, fair enough, I will take the wheel.', exampleTranslation: 'თუ საჭესთან დასაჯდომად ძალიან დაიღალე, გასაგებია, მე გავატარებ.', notes: '' },
       { id: 'b2_16', en: 'sleep on it', ge: 'გადაწყვეტილების დილამდე გადადება', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'Do not decide right now; sleep on it and tell me tomorrow.', exampleTranslation: 'ახლავე ნუ გადაწყვეტ; დილამდე მოიფიქრე და ხვალ მითხარი.', notes: '' },
-      { id: 'b2_17', en: 'at the end of the day', ge: 'საბოლოო ჯამში', level: 'B2', group: 'opinions', status: 'mastered', favorite: false, example: 'At the end of the day, customer satisfaction is what matters most.', exampleTranslation: 'საბოლოო ჯამში, მომხმარებლის კმაყოფილება ყველაზე მნიშვნელოვანია.', notes: '' },
-      { id: 'b2_18', en: 'seamlessly', ge: 'შეუფერხებლად, იდეალურად და შეუმჩნევლად', level: 'B2', group: 'tech', status: 'mastered', favorite: true, example: 'The application updates run seamlessly in the background.', exampleTranslation: 'აპლიკაციის განახლებები ფონურ რეჟიმში შეუფერხებლად მიმდინარეობს.', notes: '' },
-      { id: 'b2_19', en: 'cut to the chase', ge: 'პირდაპირ მთავარ საქმეზე გადასვლა', level: 'B2', group: 'work', status: 'learning', favorite: true, example: 'We have limited time, so let us cut to the chase.', exampleTranslation: 'დრო შეზღუდული გვაქვს, ამიტომ მოდი პირდაპირ საქმეზე გადავიდეთ.', notes: '' },
+      { id: 'b2_17', en: 'at the end of the day', ge: 'საბოლოო ჯამში', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'At the end of the day, customer satisfaction is what matters most.', exampleTranslation: 'საბოლოო ჯამში, მომხმარებლის კმაყოფილება ყველაზე მნიშვნელოვანია.', notes: '' },
+      { id: 'b2_18', en: 'seamlessly', ge: 'შეუფერხებლად, იდეალურად და შეუმჩნევლად', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The application updates run seamlessly in the background.', exampleTranslation: 'აპლიკაციის განახლებები ფონურ რეჟიმში შეუფერხებლად მიმდინარეობს.', notes: '' },
+      { id: 'b2_19', en: 'cut to the chase', ge: 'პირდაპირ მთავარ საქმეზე გადასვლა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We have limited time, so let us cut to the chase.', exampleTranslation: 'დრო შეზღუდული გვაქვს, ამიტომ მოდი პირდაპირ საქმეზე გადავიდეთ.', notes: '' },
       { id: 'b2_20', en: 'bottleneck', ge: 'შეფერხების წერტილი, ვიწრო ყელი', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The database queries were the main bottleneck slowing down our app.', exampleTranslation: 'მონაცემთა ბაზის მოთხოვნები იყო მთავარი შეფერხების წერტილი, რაც აპლიკაციას ანელებდა.', notes: '' },
+      { id: 'b2_21', en: 'ambiguous', ge: 'ორაზროვანი, ბუნდოვანი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The project specifications were too ambiguous to begin coding.', exampleTranslation: 'პროექტის სპეციფიკაციები ზედმეტად ბუნდოვანი იყო კოდის დასაწერად.', notes: '' },
+      { id: 'b2_22', en: 'anticipate', ge: 'წინასწარ განსაზღვრა, მოლოდინი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We anticipate a major spike in traffic during Black Friday.', exampleTranslation: 'შავ პარასკევს ტრაფიკის მკვეთრ ზრდას წინასწარ ველოდებით.', notes: '' },
+      { id: 'b2_23', en: 'collaborate', ge: 'თანამშრომლობა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Designers and developers need to collaborate closely.', exampleTranslation: 'დიზაინერები და დეველოპერები მჭიდროდ უნდა თანამშრომლობდნენ.', notes: '' },
+      { id: 'b2_24', en: 'dedicate', ge: 'მიძღვნა, დათმობა (დროის/ენერგიის)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'She dedicated two hours each evening to programming.', exampleTranslation: 'ის ყოველ საღამოს ორ საათს უთმობდა პროგრამირებას.', notes: '' },
+      { id: 'b2_25', en: 'efficient', ge: 'ეფექტიანი, პროდუქტიული', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'This algorithm is far more efficient than the previous one.', exampleTranslation: 'ეს ალგორითმი გაცილებით ეფექტიანია წინა ვარიანტზე.', notes: '' },
+      { id: 'b2_26', en: 'enhance', ge: 'გაუმჯობესება, გაძლიერება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The update is designed to enhance mobile performance.', exampleTranslation: 'განახლება შექმნილია მობილურის წარმადობის გასაძლიერებლად.', notes: '' },
+      { id: 'b2_27', en: 'facilitate', ge: 'ხელის შეწყობა, გაადვილება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Modern tools facilitate communication between remote teams.', exampleTranslation: 'თანამედროვე ხელსაწყოები აადვილებს დისტანციურ გუნდებს შორის კომუნიკაციას.', notes: '' },
+      { id: 'b2_28', en: 'generate', ge: 'გენერირება, შექმნა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The system can automatically generate PDF reports.', exampleTranslation: 'სისტემას შეუძლია ავტომატურად დააგენერიროს PDF რეპორტები.', notes: '' },
+      { id: 'b2_29', en: 'highlight', ge: 'ხაზგასმა, გამოკვეთა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The speaker highlighted the importance of security protocols.', exampleTranslation: 'მომხსენებელმა ხაზი გაუსვა უსაფრთხოების პროტოკოლების მნიშვნელობას.', notes: '' },
+      { id: 'b2_30', en: 'indicate', ge: 'მითითება, მინიშნება, ჩვენება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The flashing red light indicates a connection error.', exampleTranslation: 'მოციმციმე წითელი შუქი კავშირის შეცდომაზე მიუთითებს.', notes: '' },
+      { id: 'b2_31', en: 'maintain', ge: 'შენარჩუნება; ტექნიკური მომსახურება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'It is essential to maintain clean and readable code.', exampleTranslation: 'აუცილებელია სუფთა და წაკითხვადი კოდის შენარჩუნება.', notes: '' },
+      { id: 'b2_32', en: 'obtain', ge: 'მიღება, მოპოვება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'You must obtain written permission before publishing user data.', exampleTranslation: 'მომხმარებლის მონაცემების გამოქვეყნებამდე წერილობითი ნებართვა უნდა მოიპოვოთ.', notes: '' },
+      { id: 'b2_33', en: 'potential', ge: 'პოტენციური, შესაძლო', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We evaluated all potential risks prior to launch.', exampleTranslation: 'გაშვებამდე ყველა პოტენციური რისკი შევაფასეთ.', notes: '' },
+      { id: 'b2_34', en: 'precise', ge: 'ზუსტი, მკაფიო', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Please give me precise instructions on how to test this feature.', exampleTranslation: 'გთხოვთ მომცეთ ზუსტი ინსტრუქციები ამ ფუნქციის გასატესტად.', notes: '' },
+      { id: 'b2_35', en: 'resolve', ge: 'გადაწყვეტა, პრობლემის მოგვარება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The engineering team resolved the server outage within an hour.', exampleTranslation: 'საინჟინრო გუნდმა სერვერის გათიშვა ერთ საათში მოაგვარა.', notes: '' },
+      { id: 'b2_36', en: 'significant', ge: 'მნიშვნელოვანი, არსებითი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'There has been a significant increase in user engagement.', exampleTranslation: 'მომხმარებელთა ჩართულობაში მნიშვნელოვანი ზრდა დაფიქსირდა.', notes: '' },
+      { id: 'b2_37', en: 'sufficient', ge: 'საკმარისი, სამყოფი', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Make sure the server has sufficient RAM before running tests.', exampleTranslation: 'დარწმუნდი, რომ ტესტების გაშვებამდე სერვერს საკმარისი ოპერატიული მეხსიერება აქვს.', notes: '' },
+      { id: 'b2_38', en: 'undergo', ge: 'გავლა, გადატანა (პროცესის)', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The application is undergoing major infrastructure upgrades.', exampleTranslation: 'აპლიკაცია გადის მნიშვნელოვან ინფრასტრუქტურულ განახლებას.', notes: '' },
+      { id: 'b2_39', en: 'utilize', ge: 'გამოყენება (პრაქტიკულად)', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'We utilize cloud caching to accelerate response times.', exampleTranslation: 'ჩვენ ვიყენებთ ღრუბლოვან ქეშირებას პასუხის დროის დასაჩქარებლად.', notes: '' },
+      { id: 'b2_40', en: 'validate', ge: 'დამოწმება, ვალიდაცია', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'Always validate user input on the server side.', exampleTranslation: 'მომხმარებლის შეყვანილი მონაცემების ვალიდაცია ყოველთვის გააკეთეთ სერვერის მხარეს.', notes: '' },
+      { id: 'b2_41', en: 'as far as I know', ge: 'რამდენადაც ვიცი', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'As far as I know, the deployment is scheduled for Monday.', exampleTranslation: 'რამდენადაც ვიცი, სისტემის განლაგება ორშაბათისთვისაა დაგეგმილი.', notes: '' },
+      { id: 'b2_42', en: 'bear in mind', ge: 'გათვალისწინება, ყურადღებაში ქონა', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'Bear in mind that network latency can vary across regions.', exampleTranslation: 'გაითვალისწინე, რომ ქსელის დაყოვნება რეგიონების მიხედვით შეიძლება იცვლებოდეს.', notes: '' },
+      { id: 'b2_43', en: 'by all means', ge: 'რა თქმა უნდა, უეჭველად', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'If you want to try a new library, by all means, go ahead.', exampleTranslation: 'თუ გსურს ახალი ბიბლიოთეკა გამოსცადო, რა თქმა უნდა, თამამად დაიწყე.', notes: '' },
+      { id: 'b2_44', en: 'catch someone off guard', ge: 'მოუმზადებლად/მოულოდნელად წასწრება', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'The difficult question during the interview caught me off guard.', exampleTranslation: 'ინტერვიუზე დასმულმა რთულმა კითხვამ მოუმზადებელი დამიჭირა.', notes: '' },
+      { id: 'b2_45', en: 'draw conclusions', ge: 'დასკვნების გამოტანა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Do not draw conclusions without looking at the raw logs.', exampleTranslation: 'დასკვნებს ნუ გამოიტანთ ნედლი ლოგების გადამოწმების გარეშე.', notes: '' },
+      { id: 'b2_46', en: 'gain insight', ge: 'არსში ჩაწვდომა, ცოდნის მიღება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Analytics helped us gain insight into user behavior.', exampleTranslation: 'ანალიტიკა დაგვეხმარა მომხმარებლის ქცევის არსში ჩავწვდომოდით.', notes: '' },
+      { id: 'b2_47', en: 'give someone a hand', ge: 'ვინმესთვის ხელის შეშველება, დახმარება', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Could you give me a hand with this configuration file?', exampleTranslation: 'შეგიძლია ხელი შემაშველო ამ კონფიგურაციის ფაილზე?', notes: '' },
+      { id: 'b2_48', en: 'in accordance with', ge: 'თანახმად, შესაბამისად', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The architecture was built in accordance with best industry practices.', exampleTranslation: 'არქიტექტურა აიგო ინდუსტრიის საუკეთესო პრაქტიკების შესაბამისად.', notes: '' },
+      { id: 'b2_49', en: 'in response to', ge: 'საპასუხოდ', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We added dark mode in response to popular community requests.', exampleTranslation: 'მუქი თემა დავამატეთ საზოგადოების მრავალრიცხოვანი თხოვნის საპასუხოდ.', notes: '' },
+      { id: 'b2_50', en: 'make sense', ge: 'აზრის ქონა, ლოგიკური ყოფნა', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'Your proposal makes a lot of sense from a technical standpoint.', exampleTranslation: 'შენი წინადადება ტექნიკური თვალსაზრისით სავსებით ლოგიკურია.', notes: '' },
+      { id: 'b2_51', en: 'meet the deadline', ge: 'დედლაინში ჩატევა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Everyone worked overtime to meet the release deadline.', exampleTranslation: 'ყველამ ზეგანაკვეთურად იმუშავა, რათა რელიზის დედლაინში ჩავტეულიყავით.', notes: '' },
+      { id: 'b2_52', en: 'no wonder', ge: 'გასაკვირი არ არის', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'No wonder your code failed; you forgot to import the library.', exampleTranslation: 'გასაკვირი არაა რომ კოდი ჩავარდა; ბიბლიოთეკის იმპორტი დაგავიწყდა.', notes: '' },
+      { id: 'b2_53', en: 'on behalf of', ge: 'სახელით (ვინმეს მაგივრად)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'I am speaking on behalf of the entire development department.', exampleTranslation: 'მთელი დეველოპმენტის დეპარტამენტის სახელით გამოვდივარ.', notes: '' },
+      { id: 'b2_54', en: 'out of the question', ge: 'გამორიცხულია, განუხილველია', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'Delaying the launch is completely out of the question.', exampleTranslation: 'გაშვების გადადება სრულიად გამორიცხულია.', notes: '' },
+      { id: 'b2_55', en: 'play a vital role', ge: 'სასიცოცხლო როლის თამაში', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Automated testing plays a vital role in preventing software bugs.', exampleTranslation: 'ავტომატური ტესტირება სასიცოცხლო როლს თამაშობს პროგრამული ხარვეზების თავიდან აცილებაში.', notes: '' },
+      { id: 'b2_56', en: 'put into practice', ge: 'პრაქტიკაში გამოყენება/გატარება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'It is time to put what we learned into practice.', exampleTranslation: 'დროა ის, რაც ვისწავლეთ, პრაქტიკაში გამოვიყენოთ.', notes: '' },
+      { id: 'b2_57', en: 'reach out to', ge: 'ვინმესთან დაკავშირება (წერილობით/ზარით)', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Feel free to reach out to me if you encounter any difficulties.', exampleTranslation: 'თავისუფლად დამიკავშირდით, თუ რაიმე სირთულეს წააწყდებით.', notes: '' },
+      { id: 'b2_58', en: 'stand out', ge: 'გამორჩევა, თვალშისაცემობა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Her clean architecture design makes her resume stand out.', exampleTranslation: 'სუფთა არქიტექტურული დიზაინი მის რეზიუმეს თვალშისაცემს ხდის.', notes: '' },
+      { id: 'b2_59', en: 'take into consideration', ge: 'მხედველობაში მიღება', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'We took user feedback into serious consideration.', exampleTranslation: 'მომხმარებელთა უკუკავშირი სერიოზულად მივიღეთ მხედველობაში.', notes: '' },
+      { id: 'b2_60', en: 'up to a certain point', ge: 'გარკვეულ ზღვრამდე', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'I agree with your reasoning up to a certain point.', exampleTranslation: 'შენს მსჯელობას გარკვეულ ზღვრამდე ვეთანხმები.', notes: '' },
+      { id: 'b2_61', en: 'with regard to', ge: 'რაიმესთან დაკავშირებით', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'I have a few questions with regard to the new privacy policy.', exampleTranslation: 'რამდენიმე კითხვა მაქვს კონფიდენციალურობის ახალ პოლიტიკასთან დაკავშირებით.', notes: '' },
+      { id: 'b2_62', en: 'without hesitation', ge: 'ყოყმანის გარეშე', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'He accepted the tech lead position without hesitation.', exampleTranslation: 'მან ტექ-ლიდის თანამდებობა ყოყმანის გარეშე მიიღო.', notes: '' },
+      { id: 'b2_63', en: 'account for', ge: 'რაიმეს ახსნა; რაიმე წილის შეადგენა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Mobile users account for sixty percent of our traffic.', exampleTranslation: 'მობილური მომხმარებლები ჩვენი ტრაფიკის სამოც პროცენტს შეადგენენ.', notes: '' },
+      { id: 'b2_64', en: 'bring about', ge: 'რაიმეს გამოწვევა, შედეგის მოტანა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The AI revolution will bring about major changes in the job market.', exampleTranslation: 'AI რევოლუცია სამუშაო ბაზარზე დიდ ცვლილებებს მოიტანს.', notes: '' },
+      { id: 'b2_65', en: 'bring up', ge: 'თემის წამოჭრა საუბარში', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'She brought up a crucial point during the meeting.', exampleTranslation: 'მან შეხვედრისას გადამწყვეტი საკითხი წამოჭრა.', notes: '' },
+      { id: 'b2_66', en: 'call off', ge: 'გაუქმება (ღონისძიების, გეგმის)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'They called off the conference due to bad weather.', exampleTranslation: 'ცუდი ამინდის გამო მათ კონფერენცია გააუქმეს.', notes: '' },
+      { id: 'b2_67', en: 'carry out', ge: 'ჩატარება, განხორციელება (კვლევის/ტესტის)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We need to carry out extensive performance tests.', exampleTranslation: 'ჩვენ გვჭირდება ფართომასშტაბიანი წარმადობის ტესტების ჩატარება.', notes: '' },
+      { id: 'b2_68', en: 'clear up', ge: 'გარკვევა, გაუგებრობის გაფანტვა', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Let us have a brief call to clear up any confusion.', exampleTranslation: 'მოდი მოკლედ შევხმიანდეთ, რომ ნებისმიერი გაუგებრობა გავფანტოთ.', notes: '' },
+      { id: 'b2_69', en: 'come across', ge: 'შემთხვევით გადაწყდომა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'I came across a very useful open-source library today.', exampleTranslation: 'დღეს შემთხვევით ძალიან სასარგებლო ღია კოდის ბიბლიოთეკას გადავაწყდი.', notes: '' },
+      { id: 'b2_70', en: 'cope with', ge: 'გამკლავება, თავის გართმევა', level: 'B2', group: 'routine', status: 'learning', favorite: false, example: 'He is learning how to cope with high-stress environments.', exampleTranslation: 'ის სწავლობს, როგორ გაართვას თავი მაღალსტრესულ გარემოს.', notes: '' },
+      { id: 'b2_71', en: 'count on', ge: 'ვინმეს იმედზე ყოფნა', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'You can always count on him for reliable feedback.', exampleTranslation: 'სანდო უკუკავშირისთვის ყოველთვის შეგიძლია მისი იმედი გქონდეს.', notes: '' },
+      { id: 'b2_72', en: 'cut down on', ge: 'შემცირება (ხარჯის, მოხმარების)', level: 'B2', group: 'routine', status: 'learning', favorite: false, example: 'I am trying to cut down on screen time before sleep.', exampleTranslation: 'ვცდილობ ძილის წინ ეკრანთან გატარებული დრო შევამცირო.', notes: '' },
+      { id: 'b2_73', en: 'draw up', ge: 'შედგენა (გეგმის, კონტრაქტის)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The legal team will draw up the agreement tomorrow.', exampleTranslation: 'იურიდიული გუნდი ხელშეკრულებას ხვალ შეადგენს.', notes: '' },
+      { id: 'b2_74', en: 'figure in', ge: 'ანგარიშში მიღება, ჩათვლა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Make sure to figure in server costs into the final budget.', exampleTranslation: 'დარწმუნდით, რომ საბოლოო ბიუჯეტში სერვერის ხარჯებიც ჩათვალეთ.', notes: '' },
+      { id: 'b2_75', en: 'give rise to', ge: 'რაიმეს საფუძვლის დადება, გაჩენა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'This technological shift gave rise to new career opportunities.', exampleTranslation: 'ამ ტექნოლოგიურმა ძვრამ ახალ კარიერულ შესაძლებლობებს დაუდო საფუძველი.', notes: '' },
+      { id: 'b2_76', en: 'go through', ge: 'დეტალურად გადახედვა; გამოცდის გავლა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Let us go through the checklist step by step.', exampleTranslation: 'მოდი ჩეკლისტი ეტაპობრივად, დეტალურად გავიაროთ.', notes: '' },
+      { id: 'b2_77', en: 'hand over', ge: 'გადაცემა (პასუხისმგებლობის, საქმის)', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'He handed over his project to the new team lead.', exampleTranslation: 'მან თავისი პროექტი ახალ გუნდის ხელმძღვანელს გადასცა.', notes: '' },
+      { id: 'b2_78', en: 'keep up with', ge: 'ტემპის აყოლა, ჩამორჩენის თავიდან არიდება', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'It is challenging to keep up with rapid tech innovations.', exampleTranslation: 'სწრაფ ტექნოლოგიურ ინოვაციებთან ფეხის აწყობა რთულია.', notes: '' },
+      { id: 'b2_79', en: 'look down on', ge: 'ზემოდან ყურება, ქედმაღლობა', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'A good mentor never looks down on beginners.', exampleTranslation: 'კარგი მენტორი დამწყებებს არასდროს უყურებს ზემოდან.', notes: '' },
+      { id: 'b2_80', en: 'look up to', ge: 'პატივისცემა, ვინმესთვის მიბაძვა', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Many junior programmers look up to senior architects.', exampleTranslation: 'ბევრი დამწყები პროგრამისტი მაგალითს უფროსი არქიტექტორებისგან იღებს.', notes: '' },
+      { id: 'b2_81', en: 'make up for', ge: 'დანაკლისის ანაზღაურება, კომპენსირება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'Hard work can make up for a lack of prior experience.', exampleTranslation: 'შრომისმოყვარეობას შეუძლია გამოცდილების ნაკლებობა აანაზღაუროს.', notes: '' },
+      { id: 'b2_82', en: 'pass on', ge: 'გადაცემა (ინფორმაციის, შეტყობინების)', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Please pass on my gratitude to the support staff.', exampleTranslation: 'გთხოვთ, ჩემი მადლიერება გადასცეთ მხარდაჭერის თანამშრომლებს.', notes: '' },
+      { id: 'b2_83', en: 'point out', ge: 'მითითება, ყურადღების მიქცევა', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'The reviewer pointed out a critical memory leak in the loop.', exampleTranslation: 'მიმომხილველმა ციკლში არსებულ კრიტიკულ მეხსიერების გაჟონვაზე მიუთითა.', notes: '' },
+      { id: 'b2_84', en: 'rule out', ge: 'გამორიცხვა (შესაძლებლობის)', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'We can definitely rule out hardware failure as the root cause.', exampleTranslation: 'შეგვიძლია დანამდვილებით გამოვრიცხოთ აპარატურის გაფუჭება, როგორც ძირითადი მიზეზი.', notes: '' },
+      { id: 'b2_85', en: 'set aside', ge: 'გადადება (დროის, თანხის)', level: 'B2', group: 'routine', status: 'learning', favorite: false, example: 'I always set aside one hour daily for self-education.', exampleTranslation: 'ყოველდღე ერთ საათს ყოველთვის ვუთმობ თვითგანათლებას.', notes: '' },
+      { id: 'b2_86', en: 'settle down', ge: 'დამკვიდრება, დამშვიდება', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'Once the team settles down, we can discuss new features.', exampleTranslation: 'როგორც კი გუნდი დამშვიდდება, შევძლებთ ახალი ფუნქციების განხილვას.', notes: '' },
+      { id: 'b2_87', en: 'stand for', ge: 'რაიმეს აღნიშვნა (აბრევიატურის)', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'What does the acronym API stand for?', exampleTranslation: 'რას აღნიშნავს აბრევიატურა API?', notes: '' },
+      { id: 'b2_88', en: 'take over', ge: 'მმართველობის/საქმის გადაბარება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'He will take over the project while the manager is away.', exampleTranslation: 'მენეჯერის არყოფნისას პროექტს ის გადაიბარებს.', notes: '' },
+      { id: 'b2_89', en: 'think over', ge: 'საფუძვლიანად დაფიქრება', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'Take a couple of days to think over their job offer.', exampleTranslation: 'რამდენიმე დღე აიღე, რომ მათ სამუშაო შემოთავაზებაზე საფუძვლიანად დაფიქრდე.', notes: '' },
+      { id: 'b2_90', en: 'turn out', ge: 'აღმოჩენა (რომ რაღაც ასეა)', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'The difficult bug turned out to be a simple syntax typo.', exampleTranslation: 'რთული შეცდომა სინამდვილეში მარტივი სინტაქსური უზუსტობა აღმოჩნდა.', notes: '' },
+      { id: 'b2_91', en: 'wear out', ge: 'გაცვეთა, გამოფიტვა', level: 'B2', group: 'routine', status: 'learning', favorite: false, example: 'Constant overtime work will quickly wear you out.', exampleTranslation: 'მუდმივი ზეგანაკვეთური მუშაობა ძალიან სწრაფად გამოგფიტავს.', notes: '' },
+      { id: 'b2_92', en: 'wind up', ge: 'საბოლოოდ სადმე ან რაიმე მდგომარეობაში აღმოჩენა', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'If you skip testing, you might wind up breaking production.', exampleTranslation: 'თუ ტესტირებას გამოტოვებ, შეიძლება საწარმოო ბაზა დააზიანო.', notes: '' },
+      { id: 'b2_93', en: 'wipe out', ge: 'სრულიად განადგურება, წაშლა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'A flawed query accidentally wiped out the test records.', exampleTranslation: 'მცდარმა მოთხოვნამ სატესტო ჩანაწერები მთლიანად წაშალა.', notes: '' },
+      { id: 'b2_94', en: 'back up', ge: 'რეზერვირება; მხარდაჭერა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'Always back up your database before running migrations.', exampleTranslation: 'მიგრაციების გაშვებამდე ყოველთვის გააკეთე მონაცემთა ბაზის სარეზერვო ასლი.', notes: '' },
+      { id: 'b2_95', en: 'catch on', ge: 'პოპულარული გახდომა; მიხვედრა', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The new design pattern is quickly catching on with developers.', exampleTranslation: 'დიზაინის ახალი შაბლონი სწრაფად ხდება პოპულარული დეველოპერებში.', notes: '' },
+      { id: 'b2_96', en: 'drop out', ge: 'სწავლის მიტოვება, გამოთიშვა', level: 'B2', group: 'social', status: 'learning', favorite: false, example: 'He dropped out of university to launch his startup.', exampleTranslation: 'მან უნივერსიტეტი მიატოვა, რათა სტარტაპი წამოეწყო.', notes: '' },
+      { id: 'b2_97', en: 'get across', ge: 'აზრის ნათლად გადაცემა/გაგებინება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'He managed to get his complex technical idea across.', exampleTranslation: 'მან შეძლო თავისი რთული ტექნიკური იდეა გასაგებად გადმოეცა.', notes: '' },
+      { id: 'b2_98', en: 'narrow down', ge: 'სიის შევიწროება, არჩევანის შემცირება', level: 'B2', group: 'work', status: 'learning', favorite: false, example: 'We managed to narrow down the bug to a single function.', exampleTranslation: 'მოვახერხეთ შეცდომის წყარო ერთ კონკრეტულ ფუნქციამდე დაგვეყვანა.', notes: '' },
+      { id: 'b2_99', en: 'phase out', ge: 'ეტაპობრივი ამოღება (მოხმარებიდან)', level: 'B2', group: 'tech', status: 'learning', favorite: false, example: 'The company plans to phase out legacy software by year end.', exampleTranslation: 'კომპანია გეგმავს წლის ბოლომდე ძველი პროგრამა ეტაპობრივად ამოიღოს ხმარებიდან.', notes: '' },
+      { id: 'b2_100', en: 'opt for', ge: 'არჩევანის გაკეთება რაიმეზე', level: 'B2', group: 'opinions', status: 'learning', favorite: false, example: 'We opted for an open-source database rather than proprietary software.', exampleTranslation: 'ჩვენ კომერციული პროგრამის ნაცვლად ღია კოდის მონაცემთა ბაზა ვარჩიეთ.', notes: '' },
 
       // C1 Words & Chunks
-      { id: 'c1_1', en: 'ubiquitous', ge: 'ყოვლისმომცველი, ყველგანმყოფი', level: 'C1', group: 'tech', status: 'learning', favorite: true, example: 'Smartphones have become ubiquitous across modern society.', exampleTranslation: 'სმარტფონები თანამედროვე საზოგადოებაში ყველგანმყოფი გახდა.', notes: 'აკადემიური/მაღალი დონე' },
-      { id: 'c1_2', en: 'serendipity', ge: 'სასიამოვნო და ბედნიერი შემთხვევითობა', level: 'C1', group: 'social', status: 'learning', favorite: true, example: 'Meeting my current business partner was pure serendipity.', exampleTranslation: 'ჩემს ამჟამინდელ ბიზნესპარტნიორთან შეხვედრა წმინდა წყლის ბედნიერი შემთხვევითობა იყო.', notes: '' },
-      { id: 'c1_3', en: 'meticulous', ge: 'ზედმიწევნით ზუსტი, დეტალური', level: 'C1', group: 'work', status: 'learning', favorite: true, example: 'She is meticulous about code formatting and documentation.', exampleTranslation: 'ის ზედმიწევნით ზუსტი და ყურადღებიანია კოდის ფორმატირებასა და დოკუმენტაციაში.', notes: '' },
+      { id: 'c1_1', en: 'ubiquitous', ge: 'ყოვლისმომცველი, ყველგანმყოფი', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Smartphones have become ubiquitous across modern society.', exampleTranslation: 'სმარტფონები თანამედროვე საზოგადოებაში ყველგანმყოფი გახდა.', notes: 'აკადემიური/მაღალი დონე' },
+      { id: 'c1_2', en: 'serendipity', ge: 'სასიამოვნო და ბედნიერი შემთხვევითობა', level: 'C1', group: 'social', status: 'learning', favorite: false, example: 'Meeting my current business partner was pure serendipity.', exampleTranslation: 'ჩემს ამჟამინდელ ბიზნესპარტნიორთან შეხვედრა წმინდა წყლის ბედნიერი შემთხვევითობა იყო.', notes: '' },
+      { id: 'c1_3', en: 'meticulous', ge: 'ზედმიწევნით ზუსტი, დეტალური', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'She is meticulous about code formatting and documentation.', exampleTranslation: 'ის ზედმიწევნით ზუსტი და ყურადღებიანია კოდის ფორმატირებასა და დოკუმენტაციაში.', notes: '' },
       { id: 'c1_4', en: 'substantiate', ge: 'საბუთებით/არგუმენტებით განმტკიცება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'You need reliable data to substantiate your hypothesis.', exampleTranslation: 'სანდო მონაცემები გჭირდება შენი ჰიპოთეზის განსამტკიცებლად.', notes: '' },
-      { id: 'c1_5', en: 'unprecedented', ge: 'უპრეცედენტო, აქამდე არნახული', level: 'C1', group: 'tech', status: 'mastered', favorite: false, example: 'The sudden surge in web traffic was completely unprecedented.', exampleTranslation: 'ვებ-ტრაფიკის უეცარი ზრდა სრულიად უპრეცედენტო იყო.', notes: '' },
+      { id: 'c1_5', en: 'unprecedented', ge: 'უპრეცედენტო, აქამდე არნახული', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The sudden surge in web traffic was completely unprecedented.', exampleTranslation: 'ვებ-ტრაფიკის უეცარი ზრდა სრულიად უპრეცედენტო იყო.', notes: '' },
       { id: 'c1_6', en: 'elusive', ge: 'ძნელად დასაჭერი, ძნელად გასაგები', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Tracking down that elusive concurrency bug took several days.', exampleTranslation: 'იმ ძნელად დასაჭერი პარალელურობის ბაგის პოვნა რამდენიმე დღე გაგრძელდა.', notes: '' },
-      { id: 'c1_7', en: 'pragmatic', ge: 'პრაგმატული, პრაქტიკულ შედეგზე ორიენტირებული', level: 'C1', group: 'opinions', status: 'mastered', favorite: true, example: 'We took a pragmatic approach instead of striving for theoretical perfection.', exampleTranslation: 'თეორიული სრულყოფილების ძიების ნაცვლად პრაგმატული მიდგომა ავირჩიეთ.', notes: '' },
+      { id: 'c1_7', en: 'pragmatic', ge: 'პრაგმატული, პრაქტიკულ შედეგზე ორიენტირებული', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'We took a pragmatic approach instead of striving for theoretical perfection.', exampleTranslation: 'თეორიული სრულყოფილების ძიების ნაცვლად პრაგმატული მიდგომა ავირჩიეთ.', notes: '' },
       { id: 'c1_8', en: 'disparity', ge: 'მკვეთრი განსხვავება, უთანასწორობა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'There is a noticeable disparity between the initial estimate and actual cost.', exampleTranslation: 'შესამჩნევი განსხვავებაა თავდაპირველ შეფასებასა და რეალურ ხარჯს შორის.', notes: '' },
-      { id: 'c1_9', en: 'hone', ge: 'დახვეწა, გავარჯიშება (უნარის)', level: 'C1', group: 'work', status: 'learning', favorite: true, example: 'Working on real projects helped me hone my programming skills.', exampleTranslation: 'რეალურ პროექტებზე მუშაობა დამეხმარა პროგრამირების უნარების დახვეწაში.', notes: '' },
+      { id: 'c1_9', en: 'hone', ge: 'დახვეწა, გავარჯიშება (უნარის)', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Working on real projects helped me hone my programming skills.', exampleTranslation: 'რეალურ პროექტებზე მუშაობა დამეხმარა პროგრამირების უნარების დახვეწაში.', notes: '' },
       { id: 'c1_10', en: 'exacerbate', ge: 'გამწვავება, კიდევ უფრო გაუარესება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Ignoring minor software issues will only exacerbate system instability.', exampleTranslation: 'პროგრამული წვრილმანი ხარვეზების იგნორირება მხოლოდ გაამწვავებს სისტემის არასტაბილურობას.', notes: '' },
-      { id: 'c1_11', en: 'it goes without saying', ge: 'თავისთავად ცხადია, რომ...', level: 'C1', group: 'opinions', status: 'mastered', favorite: false, example: 'It goes without saying that data security must remain our top priority.', exampleTranslation: 'თავისთავად ცხადია, რომ მონაცემთა უსაფრთხოება ჩვენს მთავარ პრიორიტეტად უნდა დარჩეს.', notes: '' },
-      { id: 'c1_12', en: 'strike a balance', ge: 'ოქროს შუალედის / ბალანსის პოვნა', level: 'C1', group: 'work', status: 'learning', favorite: true, example: 'Engineers must strike a balance between high speed and software stability.', exampleTranslation: 'ინჟინრებმა უნდა იპოვონ ბალანსი მაღალ სიჩქარესა და პროგრამულ სტაბილურობას შორის.', notes: '' }
+      { id: 'c1_11', en: 'it goes without saying', ge: 'თავისთავად ცხადია, რომ...', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'It goes without saying that data security must remain our top priority.', exampleTranslation: 'თავისთავად ცხადია, რომ მონაცემთა უსაფრთხოება ჩვენს მთავარ პრიორიტეტად უნდა დარჩეს.', notes: '' },
+      { id: 'c1_12', en: 'strike a balance', ge: 'ოქროს შუალედის / ბალანსის პოვნა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Engineers must strike a balance between high speed and software stability.', exampleTranslation: 'ინჟინრებმა უნდა იპოვონ ბალანსი მაღალ სიჩქარესა და პროგრამულ სტაბილურობას შორის.', notes: '' },
+      { id: 'c1_13', en: 'anomaly', ge: 'ანომალია, გადახრა ნორმიდან', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The monitor detected an anomaly in network packet distribution.', exampleTranslation: 'მონიტორმა ქსელური პაკეტების განაწილებაში ანომალია დააფიქსირა.', notes: '' },
+      { id: 'c1_14', en: 'catalyst', ge: 'კატალიზატორი, პროცესის დამაჩქარებელი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Remote work served as a catalyst for rapid digital transformation.', exampleTranslation: 'დისტანციური მუშაობა ციფრული ტრანსფორმაციის დაჩქარების კატალიზატორი გახდა.', notes: '' },
+      { id: 'c1_15', en: 'complacent', ge: 'თვითკმაყოფილი, სიფხიზლედაკარგული', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Companies cannot afford to become complacent in competitive markets.', exampleTranslation: 'კომპანიებს არ აქვთ უფლება გახდნენ თვითკმაყოფილნი კონკურენტულ ბაზარზე.', notes: '' },
+      { id: 'c1_16', en: 'concur', ge: 'დათანხმება, ერთი აზრის გაზიარება', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'All senior engineers concurred with the proposed redesign.', exampleTranslation: 'ყველა წამყვანი ინჟინერი დაეთანხმა შემოთავაზებულ გადაკეთებას.', notes: '' },
+      { id: 'c1_17', en: 'detrimental', ge: 'საზიანო, მავნე', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Technical debt is detrimental to sustainable system development.', exampleTranslation: 'ტექნიკური ვალი საზიანოა სისტემის მდგრადი განვითარებისთვის.', notes: '' },
+      { id: 'c1_18', en: 'discreet', ge: 'თავდაჭერილი, ფრთხილი, კონფიდენციალური', level: 'C1', group: 'social', status: 'learning', favorite: false, example: 'Please remain discreet until the corporate acquisition is announced.', exampleTranslation: 'გთხოვთ იყავით თავდაჭერილნი, სანამ კორპორატიული შესყიდვა არ გამოცხადდება.', notes: '' },
+      { id: 'c1_19', en: 'divergent', ge: 'განსხვავებული, ურთიერთსაწინააღმდეგო', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'They held divergent opinions on how to restructure the database.', exampleTranslation: 'მათ განსხვავებული შეხედულებები ჰქონდათ ბაზის რესტრუქტურიზაციაზე.', notes: '' },
+      { id: 'c1_20', en: 'empirical', ge: 'ემპირიული, პრაქტიკულ გამოცდილებაზე დამყარებული', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'We need empirical benchmarks before deploying the new engine.', exampleTranslation: 'ახალი ძრავის გაშვებამდე ემპირიული შედარებითი ტესტები გვჭირდება.', notes: '' },
+      { id: 'c1_21', en: 'ephemeral', ge: 'ხანმოკლე, წარმავალი', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Serverless containers usually have an ephemeral lifecycle.', exampleTranslation: 'სერვერლეს კონტეინერებს ჩვეულებრივ ხანმოკლე სასიცოცხლო ციკლი აქვთ.', notes: '' },
+      { id: 'c1_22', en: 'equivocal', ge: 'გაურკვეველი, ორაზროვანი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'His equivocal response left the auditors quite perplexed.', exampleTranslation: 'მისმა ორაზროვანმა პასუხმა აუდიტორები საკმაოდ დაბნეული დატოვა.', notes: '' },
+      { id: 'c1_23', en: 'exemplary', ge: 'სამაგალითო', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Her attention to unit tests is an exemplary standard for junior coders.', exampleTranslation: 'მისი ყურადღება იუნიტ-ტესტებისადმი სამაგალითოა დამწყები პროგრამისტებისთვის.', notes: '' },
+      { id: 'c1_24', en: 'expedite', ge: 'დაჩქარება (პროცესის)', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Automating pipelines helped expedite software releases.', exampleTranslation: 'პროცესების ავტომატიზაციამ პროგრამული რელიზების დაჩქარებას შეუწყო ხელი.', notes: '' },
+      { id: 'c1_25', en: 'formidable', ge: 'შთამბეჭდავი, ძლევამოსილი, რთულად დასაძლევი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Migrating legacy monoliths presents a formidable challenge.', exampleTranslation: 'ძველი მონოლითური სისტემების მიგრაცია შთამბეჭდავ და რთულ გამოწვევას წარმოადგენს.', notes: '' },
+      { id: 'c1_26', en: 'imminent', ge: 'გარდაუვალი, მოახლოებული', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The team was notified of an imminent security patch release.', exampleTranslation: 'გუნდს აცნობეს უსაფრთხოების განახლების მოახლოებული გაშვების შესახებ.', notes: '' },
+      { id: 'c1_27', en: 'inadvertently', ge: 'უნებლიეთ, უნებურად', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'A script inadvertently overwrote production environment variables.', exampleTranslation: 'სკრიპტმა უნებლიეთ გადააწერა საწარმოო გარემოს ცვლადები.', notes: '' },
+      { id: 'c1_28', en: 'indispensable', ge: 'შეუცვლელი, სასიცოცხლოდ საჭირო', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Version control systems are indispensable in modern engineering.', exampleTranslation: 'ვერსიების კონტროლის სისტემები შეუცვლელია თანამედროვე ინჟინერიაში.', notes: '' },
+      { id: 'c1_29', en: 'inevitable', ge: 'გარდაუვალი', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Mistakes are inevitable when working with cutting-edge tech.', exampleTranslation: 'შეცდომები გარდაუვალია უახლეს ტექნოლოგიებთან მუშაობისას.', notes: '' },
+      { id: 'c1_30', en: 'inherent', ge: 'თანდაყოლილი, შინაგანი თვისება', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Network latency is an inherent characteristic of distributed systems.', exampleTranslation: 'ქსელური დაყოვნება განაწილებული სისტემების თანდაყოლილი მახასიათებელია.', notes: '' },
+      { id: 'c1_31', en: 'innovative', ge: 'ინოვაციური', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'They patented an innovative caching mechanism.', exampleTranslation: 'მათ დააპატენტეს ინოვაციური ქეშირების მექანიზმი.', notes: '' },
+      { id: 'c1_32', en: 'lucid', ge: 'ნათელი, გასაგები, ლოგიკური', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'He gave a remarkably lucid explanation of quantum computing.', exampleTranslation: 'მან კვანტური გამოთვლების გასაოცრად ნათელი და გასაგები ახსნა მოგვცა.', notes: '' },
+      { id: 'c1_33', en: 'lucrative', ge: 'მომგებიანი, შემოსავლიანი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Mobile AI applications offer highly lucrative opportunities.', exampleTranslation: 'მობილური AI აპლიკაციები უაღრესად მომგებიან შესაძლებლობებს გვთავაზობს.', notes: '' },
+      { id: 'c1_34', en: 'mandatory', ge: 'სავალდებულო', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Two-factor authentication is mandatory for all administrators.', exampleTranslation: 'ორფაქტორიანი აუთენტიფიკაცია სავალდებულოა ყველა ადმინისტრატორისთვის.', notes: '' },
+      { id: 'c1_35', en: 'novel', ge: 'ახლებური, ორიგინალური', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The researchers proposed a novel machine learning architecture.', exampleTranslation: 'მკვლევარებმა მანქანური სწავლების ორიგინალური არქიტექტურა შესთავაზეს.', notes: '' },
+      { id: 'c1_36', en: 'obsolete', ge: 'მოძველებული, ხმარებიდან გამოსული', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'This legacy protocol has become completely obsolete.', exampleTranslation: 'ეს ძველი პროტოკოლი სრულიად მოძველდა და გამოვიდა ხმარებიდან.', notes: '' },
+      { id: 'c1_37', en: 'paradigm', ge: 'პარადიგმა, მიდგომის მოდელი', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Functional programming represents a powerful computational paradigm.', exampleTranslation: 'ფუნქციური პროგრამირება გამოთვლითი მიდგომის მძლავრ პარადიგმას წარმოადგენს.', notes: '' },
+      { id: 'c1_38', en: 'plausible', ge: 'დამაჯერებელი, დასაჯერებელი', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'His explanation for the database timeout seems plausible.', exampleTranslation: 'მისი ახსნა ბაზის დაყოვნების მიზეზზე დამაჯერებლად გამოიყურება.', notes: '' },
+      { id: 'c1_39', en: 'prevalent', ge: 'გავრცელებული, დომინანტური', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Cloud-first deployments are prevalent in top tier tech companies.', exampleTranslation: 'ღრუბლოვანი განლაგება წამყვან ტექნოლოგიურ კომპანიებში ფართოდ გავრცელებულია.', notes: '' },
+      { id: 'c1_40', en: 'profound', ge: 'ღრმა, ძირეული', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Artificial intelligence is having a profound impact on society.', exampleTranslation: 'ხელოვნური ინტელექტი საზოგადოებაზე ღრმა და ძირეულ გავლენას ახდენს.', notes: '' },
+      { id: 'c1_41', en: 'redundant', ge: 'ზედმეტი; რეზერვული', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Redundant power supplies safeguard server uptime.', exampleTranslation: 'სარეზერვო კვების ბლოკები უზრუნველყოფს სერვერის უწყვეტ მუშაობას.', notes: '' },
+      { id: 'c1_42', en: 'resilient', ge: 'მდგრადი, გამძლე (დარტყმის/შეცდომის მიმართ)', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Microservices architecture should be resilient to single node failures.', exampleTranslation: 'მიკროსერვისული არქიტექტურა მდგრადი უნდა იყოს ცალკეული კვანძის ჩავარდნის მიმართ.', notes: '' },
+      { id: 'c1_43', en: 'rigorous', ge: 'მკაცრი, ზედმიწევნითი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The firmware underwent rigorous automated validation.', exampleTranslation: 'აპარატურულმა პროგრამამ მკაცრი ავტომატური ვალიდაცია გაიარა.', notes: '' },
+      { id: 'c1_44', en: 'scrutinize', ge: 'დეტალურად, ჩაკირკიტებით შესწავლა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Security auditors scrutinized every line of cryptography code.', exampleTranslation: 'უსაფრთხოების აუდიტორებმა კრიპტოგრაფიის კოდის თითოეული ხაზი ჩაჩხრიკეს.', notes: '' },
+      { id: 'c1_45', en: 'stipulate', ge: 'დათქმა, პირობად წამოყენება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The service level agreement stipulates 99.9% monthly availability.', exampleTranslation: 'მომსახურების ხელშეკრულება თვეში 99.9%-იან ხელმისაწვდომობას ითვალისწინებს.', notes: '' },
+      { id: 'c1_46', en: 'tangible', ge: 'მატერიალური, ხელშესახები', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The redesign delivered tangible gains in customer satisfaction.', exampleTranslation: 'დიზაინის შეცვლამ მომხმარებლის კმაყოფილებაში ხელშესახები შედეგი მოიტანა.', notes: '' },
+      { id: 'c1_47', en: 'tentative', ge: 'წინასწარი, საცდელი, არასაბოლოო', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'We have agreed upon a tentative date for the beta launch.', exampleTranslation: 'ბეტა ვერსიის გაშვების წინასწარ თარიღზე შევთანხმდით.', notes: '' },
+      { id: 'c1_48', en: 'trivial', ge: 'უმნიშვნელო, მარტივი', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Fixing the CSS alignment issue turned out to be quite trivial.', exampleTranslation: 'CSS-ის გასწორების საკითხი საკმაოდ მარტივი და უმნიშვნელო აღმოჩნდა.', notes: '' },
+      { id: 'c1_49', en: 'unanimous', ge: 'ერთსულოვანი', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The committee was unanimous in selecting the open-source stack.', exampleTranslation: 'კომიტეტი ერთსულოვანი იყო ღია კოდის ტექნოლოგიების არჩევისას.', notes: '' },
+      { id: 'c1_50', en: 'viable', ge: 'სიცოცხლისუნარიანი, პრაქტიკული', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Solar powered servers are now becoming economically viable.', exampleTranslation: 'მზის ენერგიაზე მომუშავე სერვერები უკვე ეკონომიკურად სიცოცხლისუნარიანი ხდება.', notes: '' },
+      { id: 'c1_51', en: 'a blessing in disguise', ge: 'უბედურება, რაც საბოლოოდ სიკეთედ იქცა', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Failing the first interview was a blessing in disguise; I got a better job.', exampleTranslation: 'პირველი გასაუბრების ჩავარდნა ბედნიერება იყო უბედურებაში; უკეთესი სამსახური ვიშოვე.', notes: '' },
+      { id: 'c1_52', en: 'a double-edged sword', ge: 'ორლესული მახვილი (დადებითიც და უარყოფითიც)', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Rapid scaling is a double-edged sword that tests your infrastructure.', exampleTranslation: 'სწრაფი ზრდა ორლესული მახვილია, რომელიც შენს ინფრასტრუქტურას გამოცდის წინაშე აყენებს.', notes: '' },
+      { id: 'c1_53', en: 'across the board', ge: 'საყოველთაოდ, გამონაკლისის გარეშე', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The company raised salaries by ten percent across the board.', exampleTranslation: 'კომპანიამ ხელფასები საყოველთაოდ, ყველასთვის ათი პროცენტით გაზარდა.', notes: '' },
+      { id: 'c1_54', en: 'at a crossroads', ge: 'გზაგასაყარზე (მნიშვნელოვანი გადაწყვეტილების წინ)', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'Our startup is at a crossroads regarding international expansion.', exampleTranslation: 'ჩვენი სტარტაპი საერთაშორისო გაფართოებასთან დაკავშირებით გზაგასაყარზე დგას.', notes: '' },
+      { id: 'c1_55', en: 'by virtue of', ge: 'რაიმეს საფუძველზე, წყალობით', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'She leads the team by virtue of her unmatched domain expertise.', exampleTranslation: 'ის გუნდს თავისი შეუდარებელი დარგობრივი გამოცდილების წყალობით ხელმძღვანელობს.', notes: '' },
+      { id: 'c1_56', en: 'come to terms with', ge: 'შეგუება (რეალობასთან)', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The leadership had to come to terms with slowing revenue growth.', exampleTranslation: 'ხელმძღვანელობას მოუწია შემოსავლების ზრდის შენელების რეალობას შეგუებოდა.', notes: '' },
+      { id: 'c1_57', en: 'for the time being', ge: 'ამ ეტაპზე, დროებით', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'We will keep the current design layout for the time being.', exampleTranslation: 'ამ ეტაპზე დიზაინის მიმდინარე განლაგებას შევინარჩუნებთ.', notes: '' },
+      { id: 'c1_58', en: 'in light of', ge: 'რაიმეს გათვალისწინებით', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'In light of new evidence, we decided to alter our architecture.', exampleTranslation: 'ახალი მტკიცებულებების გათვალისწინებით, არქიტექტურის შეცვლა გადავწყვიტეთ.', notes: '' },
+      { id: 'c1_59', en: 'in the long run', ge: 'გრძელვადიან პერსპექტივაში', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Writing tests takes time now but saves days in the long run.', exampleTranslation: 'ტესტების წერა ახლა დროს მოითხოვს, მაგრამ გრძელვადიან პერსპექტივაში დღეებს დაგიზოგავს.', notes: '' },
+      { id: 'c1_60', en: 'leave no stone unturned', ge: 'ყველაფრის გაკეთება, ყველა გზის მოსინჯვა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'We left no stone unturned while hunting down the memory leak.', exampleTranslation: 'ყველა შესაძლო გზა მოვსინჯეთ მეხსიერების გაჟონვის ძიებისას.', notes: '' },
+      { id: 'c1_61', en: 'on the verge of', ge: 'რაიმეს ზღვარზე ყოფნა', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Scientists are on the verge of a groundbreaking quantum discovery.', exampleTranslation: 'მეცნიერები გარღვევის მომტანი კვანტური აღმოჩენის ზღვარზე არიან.', notes: '' },
+      { id: 'c1_62', en: 'play devil advocate', ge: 'მოწინააღმდეგის პოზიციის დაცვა კამათისას', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Let me play devil advocate for a moment to test your reasoning.', exampleTranslation: 'მოდი ერთი წუთით საპირისპირო პოზიცია დავიცვა, რომ შენი მსჯელობა გამოვცადო.', notes: '' },
+      { id: 'c1_63', en: 'read between the lines', ge: 'ქვეტექსტის წაკითხვა, ფარული აზრის გაგება', level: 'C1', group: 'social', status: 'learning', favorite: false, example: 'Reading between the lines, they are unlikely to renew the contract.', exampleTranslation: 'თუ ქვეტექსტს წავიკითხავთ, ნაკლებად სავარაუდოა, რომ კონტრაქტი გააგრძელონ.', notes: '' },
+      { id: 'c1_64', en: 'shed light on', ge: 'შუქის მოფენა, საკითხის გარკვევა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The diagnostic report shed light on the server crash.', exampleTranslation: 'დიაგნოსტიკურმა რეპორტმა სერვერის ავარიულ გათიშვას შუქი მოჰფინა.', notes: '' },
+      { id: 'c1_65', en: 'the tip of the iceberg', ge: 'აისბერგის მწვერვალი (პრობლემის მცირე ნაწილი)', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The visual glitch was merely the tip of the iceberg of legacy debt.', exampleTranslation: 'ვიზუალური ხარვეზი ძველი ტექნიკური ვალის მხოლოდ აისბერგის მწვერვალი იყო.', notes: '' },
+      { id: 'c1_66', en: 'through thick and thin', ge: 'ჭირსა და ლხინში, ურყევად', level: 'C1', group: 'social', status: 'learning', favorite: false, example: 'The co-founders stood together through thick and thin.', exampleTranslation: 'თანადამფუძნებლები ჭირსა და ლხინში ერთად იდგნენ.', notes: '' },
+      { id: 'c1_67', en: 'to say the least', ge: 'რბილად რომ ვთქვათ', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The migration was complicated, to say the least.', exampleTranslation: 'მიგრაცია, რბილად რომ ვთქვათ, საკმაოდ რთული იყო.', notes: '' },
+      { id: 'c1_68', en: 'up in the air', ge: 'გაურკვევლობაში, ჰაერში გამოკიდებული', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Our product release date is still up in the air.', exampleTranslation: 'ჩვენი პროდუქტის გამოშვების თარიღი ჯერ კიდევ გაურკვეველია.', notes: '' },
+      { id: 'c1_69', en: 'with flying colors', ge: 'ბრწყინვალედ, წარმატებით', level: 'C1', group: 'social', status: 'learning', favorite: false, example: 'She passed the technical interview with flying colors.', exampleTranslation: 'მან ტექნიკური გასაუბრება ბრწყინვალედ ჩააბარა.', notes: '' },
+      { id: 'c1_70', en: 'with an eye to', ge: 'მიზნად დასახვით', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The database was architected with an eye to future scaling.', exampleTranslation: 'მონაცემთა ბაზა სამომავლო მასშტაბირების მიზნით დაპროექტდა.', notes: '' },
+      { id: 'c1_71', en: 'boil down to', ge: 'არსზე დაყვანა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The whole argument boils down to latency versus consistency.', exampleTranslation: 'მთელი ეს კამათი დაყოვნებასა და თანმიმდევრულობას შორის არჩევანზე დაიყვანება.', notes: '' },
+      { id: 'c1_72', en: 'brush up on', ge: 'ცოდნის განახლება, გახსენება', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'I need to brush up on my Docker skills before next week.', exampleTranslation: 'მომავალ კვირამდე Docker-ის ცოდნის გახსენება და განახლება მჭირდება.', notes: '' },
+      { id: 'c1_73', en: 'clamp down on', ge: 'მკაცრი ზომების მიღება (ხარვეზის/დარღვევის წინააღმდეგ)', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Management decided to clamp down on unauthorized third-party scripts.', exampleTranslation: 'ხელმძღვანელობამ არაავტორიზებული გარე სკრიპტების წინააღმდეგ მკაცრი ზომები მიიღო.', notes: '' },
+      { id: 'c1_74', en: 'come down with', ge: 'ავად გახდომა', level: 'C1', group: 'routine', status: 'learning', favorite: false, example: 'I think I am coming down with the flu.', exampleTranslation: 'მგონი გრიპი მეწყება.', notes: '' },
+      { id: 'c1_75', en: 'crack down on', ge: 'მკაცრად დასჯა, აღკვეთა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The cloud provider is cracking down on crypto mining abuse.', exampleTranslation: 'ღრუბლოვანი პროვაიდერი მკაცრად აღკვეთს კრიპტომაინინგის ბოროტად გამოყენებას.', notes: '' },
+      { id: 'c1_76', en: 'dawn on', ge: 'უეცრად თავში აზრად მოსვლა / გაცნობიერება', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'It suddenly dawned on me that the API endpoint was misconfigured.', exampleTranslation: 'მოულოდნელად გავაცნობიერე, რომ API-ის მისამართი არასწორად იყო მითითებული.', notes: '' },
+      { id: 'c1_77', en: 'gloss over', ge: 'პრობლემის მიჩუმათება, ზედაპირულად გადავლა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Do not gloss over system bottlenecks in your status report.', exampleTranslation: 'შენს სტატუსის რეპორტში სისტემის შეფერხების წერტილებს ზედაპირულად ნუ გადაუვლი.', notes: '' },
+      { id: 'c1_78', en: 'iron out', ge: 'უთანხმოების ან ხარვეზის გასწორება, მოგვარება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'We held a workshop to iron out the remaining edge cases.', exampleTranslation: 'დარჩენილი სასაზღვრო შემთხვევების მოსაგვარებლად სამუშაო შეხვედრა ჩავატარეთ.', notes: '' },
+      { id: 'c1_79', en: 'level off', ge: 'სტაბილიზაცია, გასწორება (ზრდის შემდეგ)', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'CPU usage finally leveled off after caching was activated.', exampleTranslation: 'ქეშირების გააქტიურების შემდეგ პროცესორის დატვირთვა საბოლოოდ დასტაბილურდა.', notes: '' },
+      { id: 'c1_80', en: 'pan out', ge: 'წარმატებით დასრულება (გეგმის)', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Their radical marketing plan panned out remarkably well.', exampleTranslation: 'მათი რადიკალური მარკეტინგული გეგმა საოცრად წარმატებით დასრულდა.', notes: '' },
+      { id: 'c1_81', en: 'peter out', ge: 'თანდათან მილევა, გაქრობა', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The initial hype around the framework quickly petered out.', exampleTranslation: 'ახალი ფრეიმვორკის გარშემო ატეხილი აჟიოტაჟი თანდათან მინელდა.', notes: '' },
+      { id: 'c1_82', en: 'pore over', ge: 'ჩაკირკიტება, დიდი ყურადღებით კითხვა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Engineers pored over the crash logs for several hours.', exampleTranslation: 'ინჟინრები საათების განმავლობაში ჩაჰკირკიტებდნენ ავარიული გათიშვის ლოგებს.', notes: '' },
+      { id: 'c1_83', en: 'ramp up', ge: 'ტემპის, სიმძლავრის გაზრდა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The company is ramping up hiring for AI research teams.', exampleTranslation: 'კომპანია AI კვლევითი გუნდებისთვის თანამშრომლების აყვანას აჩქარებს.', notes: '' },
+      { id: 'c1_84', en: 'root out', ge: 'ძირფესვიანად ამოძირკვა, აღმოფხვრა', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'Our goal is to root out all redundant code dependencies.', exampleTranslation: 'ჩვენი მიზანია ყველა ზედმეტი კოდის დამოკიდებულების ძირფესვიანად აღმოფხვრა.', notes: '' },
+      { id: 'c1_85', en: 'scale back', ge: 'შემცირება, მასშტაბის დაკლება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'We had to scale back project features due to strict deadlines.', exampleTranslation: 'მკაცრი დედლაინების გამო მოგვიწია პროექტის ფუნქციების შემცირება.', notes: '' },
+      { id: 'c1_86', en: 'sift through', ge: 'დიდი მოცულობის მონაცემების გაცხრილვა/გადარჩევა', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The machine learning model sifts through terabytes of raw logs.', exampleTranslation: 'მანქანური სწავლების მოდელი ტერაბაიტობით ნედლ ლოგებს ცხრილავს.', notes: '' },
+      { id: 'c1_87', en: 'spark off', ge: 'საპროტესტო ტალღის ან დისკუსიის დაწყება', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The pricing update sparked off an intense online debate.', exampleTranslation: 'ფასების განახლებამ მწვავე ონლაინ დისკუსია გამოიწვია.', notes: '' },
+      { id: 'c1_88', en: 'stumble upon', ge: 'შემთხვევით გადაწყდომა/აღმოჩენა', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'We stumbled upon a fascinating security bypass during testing.', exampleTranslation: 'ტესტირებისას შემთხვევით უსაფრთხოების საინტერესო გვერდის ავლას გადავაწყდით.', notes: '' },
+      { id: 'c1_89', en: 'zero in on', ge: 'ზუსტად მიზანში ამოღება, ფოკუსირება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The profiler helped zero in on the memory intensive routine.', exampleTranslation: 'პროფაილერი დაგვეხმარა ზუსტად მეხსიერების ინტენსიურ ქვესისტემაზე ფოკუსირებაში.', notes: '' },
+      { id: 'c1_90', en: 'stem from', ge: 'რაიმედან გამომდინარეობა', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Most performance issues stem from unindexed SQL queries.', exampleTranslation: 'წარმადობის პრობლემების უმეტესობა დაუინდექსებელი SQL მოთხოვნებიდან მომდინარეობს.', notes: '' },
+      { id: 'c1_91', en: 'contingent upon', ge: 'დამოკიდებული რაიმე გარემოებაზე', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The software release is strictly contingent upon QA approval.', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The software release is strictly contingent upon QA approval.', exampleTranslation: 'პროგრამის რელიზი მკაცრად არის დამოკიდებული QA-ს თანხმობაზე.', notes: '' },
+      { id: 'c1_92', en: 'culminate in', ge: 'კულმინაციამდე მიღწევა, დაგვირგვინება', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Months of intensive research culminated in a major breakthrough.', exampleTranslation: 'თვეების ინტენსიური კვლევა უდიდესი გარღვევით დაგვირგვინდა.', notes: '' },
+      { id: 'c1_93', en: 'devoid of', ge: 'სრულიად მოკლებული', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The initial documentation was completely devoid of practical examples.', exampleTranslation: 'თავდაპირველი დოკუმენტაცია სრულიად მოკლებული იყო პრაქტიკულ მაგალითებს.', notes: '' },
+      { id: 'c1_94', en: 'fraught with', ge: 'სავსე საფრთხეებით/რისკებით', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'Rewriting a working system from scratch is fraught with risk.', exampleTranslation: 'მომუშავე სისტემის ნულიდან გადაწერა სავსეა რისკებით.', notes: '' },
+      { id: 'c1_95', en: 'in tandem with', ge: 'რაიმესთან ტანდემში, ერთობლივად', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The frontend app was developed in tandem with the backend API.', exampleTranslation: 'ფრონტენდ აპლიკაცია ბექენდ API-სთან ტანდემში შეიქმნა.', notes: '' },
+      { id: 'c1_96', en: 'nexus', ge: 'დამაკავშირებელი კვანძი, ცენტრი', level: 'C1', group: 'tech', status: 'learning', favorite: false, example: 'The API gateway serves as the nexus of all microservices.', exampleTranslation: 'API გეითვეი ყველა მიკროსერვისის ცენტრალურ დამაკავშირებელ კვანძს წარმოადგენს.', notes: '' },
+      { id: 'c1_97', en: 'predicament', ge: 'რთული და უსიამოვნო მდგომარეობა', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'The loss of backup data put the company in a grave predicament.', exampleTranslation: 'სარეზერვო ასლების დაკარგვამ კომპანია მძიმე მდგომარეობაში ჩააყენა.', notes: '' },
+      { id: 'c1_98', en: 'quintessential', ge: 'იდეალური, ტიპური ნიმუში', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'This project is the quintessential example of modern software engineering.', exampleTranslation: 'ეს პროექტი თანამედროვე პროგრამული ინჟინერიის იდეალური ნიმუშია.', notes: '' },
+      { id: 'c1_99', en: 'salient', ge: 'თვალშისაცემი, ყველაზე მნიშვნელოვანი', level: 'C1', group: 'work', status: 'learning', favorite: false, example: 'The speaker summarized the most salient points of the paper.', exampleTranslation: 'მომხსენებელმა ნაშრომის ყველაზე თვალშისაცემი და მნიშვნელოვანი პუნქტები შეაჯამა.', notes: '' },
+      { id: 'c1_100', en: 'tenacity', ge: 'შეუპოვრობა, შეუპოვარი სიჯიუტე', level: 'C1', group: 'opinions', status: 'learning', favorite: false, example: 'His professional tenacity allowed him to master complex systems.', exampleTranslation: 'პროფესიულმა შეუპოვრობამ მას რთული სისტემების სრულყოფილად ათვისების საშუალება მისცა.', notes: '' }
     ];
 
-    // Main in-memory collections
-    let words = JSON.parse(localStorage.getItem('lc_words')) || INITIAL_WORDS;
+    // Main in-memory collections with smart version upgrade
+    const DB_VERSION_KEY = 'lc_db_version_v3';
+    let words = [];
+    if (localStorage.getItem(DB_VERSION_KEY) !== 'loaded_v3') {
+      words = INITIAL_WORDS;
+      localStorage.setItem('lc_words', JSON.stringify(words));
+      localStorage.setItem(DB_VERSION_KEY, 'loaded_v3');
+    } else {
+      words = JSON.parse(localStorage.getItem('lc_words')) || INITIAL_WORDS;
+    }
     let groups = JSON.parse(localStorage.getItem('lc_groups')) || DEFAULT_GROUPS;
 
     // Filters and UI state
@@ -745,12 +1050,18 @@
     // AI Feed Storage
     let aiFeedItems = JSON.parse(localStorage.getItem('lc_ai_feed')) || [];
 
+    // Firebase state
+    let firebaseDb = null;
+    let firebaseUnsubscribe = null;
+    let isCloudSyncing = false;
+
     /* ========================================================
        INIT & PERSISTENCE
        ======================================================== */
     window.addEventListener('DOMContentLoaded', () => {
       ensureGroupsSynchronized();
       initTheme();
+      initFirebase();
       populateGroupSelects();
       renderWords();
       updateStats();
@@ -775,6 +1086,133 @@
       localStorage.setItem('lc_words', JSON.stringify(words));
       localStorage.setItem('lc_groups', JSON.stringify(groups));
       updateStats();
+      syncToFirebase();
+    }
+
+    /* ========================================================
+       GOOGLE FIREBASE CLOUD SYNC
+       ======================================================== */
+    function openCloudModal() {
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
+      document.getElementById('fb-api-key').value = cfg.apiKey || '';
+      document.getElementById('fb-project-id').value = cfg.projectId || '';
+      document.getElementById('fb-user-id').value = cfg.userId || 'my_english_profile';
+      document.getElementById('cloud-modal').classList.remove('hidden');
+    }
+
+    function closeCloudModal() {
+      document.getElementById('cloud-modal').classList.add('hidden');
+    }
+
+    function updateCloudStatusUI(status, label) {
+      const ind = document.getElementById('cloud-indicator');
+      const text = document.getElementById('cloud-status-text');
+      if (!ind || !text) return;
+
+      if (status === 'connected') {
+        ind.className = 'w-2 h-2 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50';
+        text.textContent = label || 'Cloud Sync';
+      } else if (status === 'syncing') {
+        ind.className = 'w-2 h-2 rounded-full bg-amber-500 animate-ping';
+        text.textContent = 'ინახება...';
+      } else {
+        ind.className = 'w-2 h-2 rounded-full bg-slate-400';
+        text.textContent = 'ლოკალური';
+      }
+    }
+
+    function initFirebase() {
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
+      if (!cfg.apiKey || !cfg.projectId || !cfg.userId) {
+        updateCloudStatusUI('disconnected');
+        return;
+      }
+
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp({
+            apiKey: cfg.apiKey,
+            projectId: cfg.projectId,
+            authDomain: `${cfg.projectId}.firebaseapp.com`,
+          });
+        }
+        firebaseDb = firebase.firestore();
+        updateCloudStatusUI('connected', 'Cloud აქტიურია');
+
+        // Realtime Listener
+        if (firebaseUnsubscribe) firebaseUnsubscribe();
+        firebaseUnsubscribe = firebaseDb.collection('linguacraft_users').doc(cfg.userId)
+          .onSnapshot((doc) => {
+            if (doc.exists && !isCloudSyncing) {
+              const data = doc.data();
+              if (data && Array.isArray(data.words)) {
+                words = data.words;
+                if (Array.isArray(data.groups)) groups = data.groups;
+                localStorage.setItem('lc_words', JSON.stringify(words));
+                localStorage.setItem('lc_groups', JSON.stringify(groups));
+                renderWords();
+                updateStats();
+                populateGroupSelects();
+              }
+            }
+          }, (err) => {
+            console.warn('Firebase sync listener error:', err);
+            updateCloudStatusUI('disconnected');
+          });
+
+      } catch (err) {
+        console.warn('Firebase init error:', err);
+        updateCloudStatusUI('disconnected');
+      }
+    }
+
+    async function syncToFirebase() {
+      if (!firebaseDb) return;
+      const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || '{}');
+      if (!cfg.userId) return;
+
+      try {
+        isCloudSyncing = true;
+        updateCloudStatusUI('syncing');
+        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+          words: words,
+          groups: groups,
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+        updateCloudStatusUI('connected', 'სინქრონიზებულია');
+      } catch (err) {
+        console.warn('Firebase save error:', err);
+        updateCloudStatusUI('connected', 'ოფლაინ შენახვა');
+      } finally {
+        isCloudSyncing = false;
+      }
+    }
+
+    function saveFirebaseConfig(e) {
+      e.preventDefault();
+      const apiKey = document.getElementById('fb-api-key').value.trim();
+      const projectId = document.getElementById('fb-project-id').value.trim();
+      const userId = document.getElementById('fb-user-id').value.trim();
+
+      if (!apiKey || !projectId || !userId) {
+        showToast('გთხოვთ შეავსოთ ყველა ველი', true);
+        return;
+      }
+
+      localStorage.setItem('lc_fb_config', JSON.stringify({ apiKey, projectId, userId }));
+      initFirebase();
+      syncToFirebase();
+      closeCloudModal();
+      showToast('Firebase სინქრონიზაცია წარმატებით ჩაირთო!');
+    }
+
+    function disconnectFirebase() {
+      if (firebaseUnsubscribe) firebaseUnsubscribe();
+      localStorage.removeItem('lc_fb_config');
+      firebaseDb = null;
+      updateCloudStatusUI('disconnected');
+      closeCloudModal();
+      showToast('Firebase სინქრონიზაცია გაითიშა');
     }
 
     /* ========================================================
