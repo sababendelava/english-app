@@ -1688,29 +1688,33 @@ Return strictly valid JSON:
         // REALTIME LISTENER: Syncs additions, deletions and edits instantly across all devices!
         firebaseUnsubscribe = userDocRef.onSnapshot({ includeMetadataChanges: true }, (docSnap) => {
           if (!docSnap || !docSnap.exists) {
-            console.log('Document not found or empty, creating baseline...');
-            forcePushAllToFirebase();
+            console.log('Firebase-ში დოკუმენტი ჯერ არ არის, ვქმნით პირველად ასლს...');
+            // მხოლოდ და მხოლოდ მაშინ, როცა ბაზა სრულიად ცარიელია, იტვირთება პირველადი სია
+            userDocRef.set({
+              words: words,
+              groups: groups,
+              lastUpdated: new Date().toISOString()
+            });
             return;
           }
 
-          // If the snapshot has pending local writes, do not overwrite local UI to prevent flicker/disappearing words
+          // თუ ჩაწერა ჯერ ადგილობრივად მიმდინარეობს, UI არ გადავაწეროთ
           if (docSnap.metadata && docSnap.metadata.hasPendingWrites) {
             return;
           }
 
           const data = docSnap.data();
-          if (data && Array.isArray(data.words) && data.words.length > 0) {
+          if (data && Array.isArray(data.words)) {
+            const serverWords = data.words;
             const uniqueMap = new Map();
 
-            // First insert incoming server words
-            data.words.forEach(w => {
+            // 1. ჯერ ავიღოთ სერვერზე არსებული ყველა სიტყვა
+            serverWords.forEach(w => {
               const key = (w.en || '').trim().toLowerCase();
-              if (key && !uniqueMap.has(key)) {
-                uniqueMap.set(key, w);
-              }
+              if (key) uniqueMap.set(key, w);
             });
 
-            // Keep any locally created words that haven't synced yet
+            // 2. დავამატოთ ლოკალურად არსებული ის სიტყვები, რაც მომხმარებელმა ახლახან ჩაწერა
             words.forEach(lw => {
               const lKey = (lw.en || '').trim().toLowerCase();
               if (lKey && !uniqueMap.has(lKey)) {
@@ -1718,6 +1722,7 @@ Return strictly valid JSON:
               }
             });
 
+            // მივიღეთ სრული, უდანაკარგო სია
             words = Array.from(uniqueMap.values());
             localStorage.setItem('lc_words', JSON.stringify(words));
             
@@ -1753,7 +1758,7 @@ Return strictly valid JSON:
       try {
         updateCloudStatusUI('syncing', 'ინახება...');
 
-        // Deduplicate before saving
+        // დუბლიკატებისგან გასუფთავება მიმდინარე სიის
         const uniqueMap = new Map();
         words.forEach(w => {
           const key = (w.en || '').trim().toLowerCase();
@@ -1763,6 +1768,7 @@ Return strictly valid JSON:
         });
         const cleanWords = Array.from(uniqueMap.values());
 
+        // ინახება ზუსტად ის სია, რაც მომხმარებელს აქვს ეკრანზე (ახალი სიტყვებით!)
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
           words: cleanWords,
           groups: groups,
@@ -1788,37 +1794,32 @@ Return strictly valid JSON:
       if (!cfg.userId) return;
 
       try {
-        updateCloudStatusUI('syncing', 'იტვირთება 300...');
-        showToast('სუფთა 300 სიტყვა იგზავნება Google Cloud-ში...');
+        updateCloudStatusUI('syncing', 'ინახება...');
+        showToast('მიმდინარე სიტყვები იგზავნება Cloud-ში...');
         
-        // Strict deduplication against initial 300
+        // აღარ ვიყენებთ INITIAL_WORDS-ს გადასაწერად! ვინახავთ მიმდინარე რეალურ words-ს
         const uniqueMap = new Map();
-        INITIAL_WORDS.forEach(w => {
+        words.forEach(w => {
           const key = (w.en || '').trim().toLowerCase();
           if (key && !uniqueMap.has(key)) {
             uniqueMap.set(key, w);
           }
         });
-        const cleanBaseline = Array.from(uniqueMap.values());
+        const currentCleanWords = Array.from(uniqueMap.values());
 
         await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
-          words: cleanBaseline,
-          groups: DEFAULT_GROUPS,
+          words: currentCleanWords,
+          groups: groups,
           lastUpdated: new Date().toISOString()
-        });
+        }, { merge: true });
         
-        words = cleanBaseline;
-        groups = DEFAULT_GROUPS;
+        words = currentCleanWords;
         localStorage.setItem('lc_words', JSON.stringify(words));
-        localStorage.setItem('lc_groups', JSON.stringify(groups));
 
-        populateGroupSelects();
-        renderGroupsList();
         renderWords();
         updateStats();
-        initPracticeFlashcards();
         updateCloudStatusUI('connected', 'Cloud აქტიურია');
-        showToast('✅ სუფთა 300 სიტყვა წარმატებით აიტვირთა Firebase-ში!');
+        showToast(`✅ ${words.length} სიტყვა წარმატებით შენახულია ღრუბელში!`);
         return true;
       } catch (err) {
         console.error('Force push failed:', err);
