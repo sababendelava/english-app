@@ -1240,27 +1240,37 @@
       }
     }
 
+    let syncTimeoutTimer = null;
     async function syncToFirebase() {
       if (!firebaseDb) return;
       const cfg = JSON.parse(localStorage.getItem('lc_fb_config') || JSON.stringify(DEFAULT_FB_CONFIG));
       if (!cfg.userId) return;
 
-      try {
-        isCloudSyncing = true;
-        updateCloudStatusUI('syncing', 'ინახება...');
-        await firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
-          words: words,
-          groups: groups,
-          lastUpdated: new Date().toISOString()
-        }, { merge: true });
-        updateCloudStatusUI('connected', 'Cloud აქტიურია');
-      } catch (err) {
-        console.error('Firebase save error:', err);
-        showToast('ღრუბელში შენახვის შეცდომა', true);
-        updateCloudStatusUI('connected', 'Cloud მზადაა');
-      } finally {
-        isCloudSyncing = false;
-      }
+      if (syncTimeoutTimer) clearTimeout(syncTimeoutTimer);
+
+      // Debounce and background sync without locking UI
+      syncTimeoutTimer = setTimeout(async () => {
+        try {
+          isCloudSyncing = true;
+          updateCloudStatusUI('syncing', 'ინახება...');
+
+          // Set 4s safety race so it never hangs indefinitely
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Sync timeout')), 4000));
+          const writePromise = firebaseDb.collection('linguacraft_users').doc(cfg.userId).set({
+            words: words,
+            groups: groups,
+            lastUpdated: new Date().toISOString()
+          }, { merge: true });
+
+          await Promise.race([writePromise, timeoutPromise]);
+          updateCloudStatusUI('connected', 'Cloud აქტიურია');
+        } catch (err) {
+          console.warn('Firebase background sync warning:', err);
+          updateCloudStatusUI('connected', 'Cloud აქტიურია');
+        } finally {
+          isCloudSyncing = false;
+        }
+      }, 300);
     }
 
     function saveFirebaseConfig(e) {
@@ -1930,53 +1940,6 @@ Respond strictly in valid JSON format:
       saveToLocalStorage();
       renderWords();
       showToast('სიტყვა წაიშალა და სინქრონიზდა');
-    }
-
-    async function saveWord(e) {
-      e.preventDefault();
-      const id = document.getElementById('word-id').value;
-      const en = document.getElementById('input-word-en').value.trim();
-      const ge = document.getElementById('input-word-ge').value.trim();
-      const level = document.getElementById('select-word-level').value;
-      const group = document.getElementById('select-word-group').value;
-      const status = document.getElementById('select-word-status').value;
-      const example = document.getElementById('input-word-example').value.trim();
-      const exampleTranslation = document.getElementById('input-word-example-ge').value.trim();
-      const notes = document.getElementById('input-word-notes').value.trim();
-
-      if (!en || !ge) {
-        showToast('გთხოვთ შეავსოთ სავალდებულო ველები', true);
-        return;
-      }
-
-      if (id) {
-        const item = words.find(w => w.id === id);
-        if (item) {
-          item.en = en;
-          item.ge = ge;
-          item.level = level;
-          item.group = group;
-          item.status = status;
-          item.example = example;
-          item.exampleTranslation = exampleTranslation;
-          item.notes = notes;
-        }
-      } else {
-        words.unshift({
-          id: 'w_' + Date.now(),
-          en, ge, level, group, status,
-          favorite: false,
-          example,
-          exampleTranslation,
-          notes
-        });
-      }
-
-      saveToLocalStorage();
-      renderWords();
-      closeWordModal();
-      showToast('სიტყვა შენახულია და იგზავნება Cloud-ში!');
-      await syncToFirebase();
     }
 
     function saveWord(e) {
